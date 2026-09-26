@@ -3,6 +3,10 @@ node_modules/
 out/
 .env
 .env*.local
+.data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 *.tsbuildinfo
 vitest-results.json
 *.log

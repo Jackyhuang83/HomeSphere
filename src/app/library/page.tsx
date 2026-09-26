@@ -1,0 +1,135 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { Header } from '@/components/header';
+import { SiteFooter } from '@/components/site-footer';
+import type { LibraryWork } from '@/lib/library/types';
+
+type Filter='all'|'movie'|'tv';
+
+export default function LibraryPage() {
+  const [items,setItems]=useState<LibraryWork[]>([]);
+  const [total,setTotal]=useState(0);
+  const [filter,setFilter]=useState<Filter>('all');
+  const [query,setQuery]=useState('');
+  const [activeQuery,setActiveQuery]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [syncing,setSyncing]=useState(false);
+  const [configured,setConfigured]=useState(false);
+  const [rootsConfigured,setRootsConfigured]=useState(false);
+  const [message,setMessage]=useState('');
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    try {
+      const url=activeQuery
+        ? `/api/library/search?q=${encodeURIComponent(activeQuery)}`
+        : `/api/library?limit=120${filter==='all'?'':`&type=${filter}`}`;
+      const res=await fetch(url,{cache:'no-store'});
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.error || '片库读取失败');
+      setItems(data.items || []);
+      setTotal(data.total ?? data.items?.length ?? 0);
+      if(!activeQuery) {
+        setConfigured((data.configuredProviders || []).includes('115'));
+        setRootsConfigured(Boolean(data.mediaRootsConfigured));
+      }
+    } catch(error) {
+      setMessage(error instanceof Error?error.message:'片库读取失败');
+    } finally { setLoading(false); }
+  },[activeQuery,filter]);
+
+  useEffect(()=>{void load();},[load]);
+
+  const sync=async()=>{
+    if(syncing) return;
+    setSyncing(true); setMessage('');
+    try {
+      const res=await fetch('/api/library/sync',{method:'POST'});
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.error || '同步失败');
+      const s=data.summary;
+      setMessage(`同步完成：${s.worksIndexed} 部作品，${s.videoFilesIndexed} 个视频文件，扫描 ${s.directoriesScanned} 个目录`);
+      setActiveQuery('');
+      setQuery('');
+      await load();
+    } catch(error) {
+      setMessage(error instanceof Error?error.message:'同步失败');
+    } finally { setSyncing(false); }
+  };
+
+  const submitSearch=(e:React.FormEvent)=>{
+    e.preventDefault();
+    setActiveQuery(query.trim());
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-5">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-content">我的115片库</h1>
+            <p className="text-sm text-muted mt-1">浏览与搜索只读本地 SQLite；只有同步和播放会访问115。</p>
+          </div>
+          <button className="btn-primary h-10" onClick={()=>void sync()} disabled={syncing || !configured || !rootsConfigured}>
+            {syncing?'同步中…':'同步115'}
+          </button>
+        </div>
+
+        {!configured && <Notice>尚未配置 <code>HOMESPHERE_115_COOKIE</code>。</Notice>}
+        {configured && !rootsConfigured && <Notice>尚未配置 <code>HOMESPHERE_115_MEDIA_DIRS</code>；请指定具体影视目录，不能使用根目录 /。</Notice>}
+        {message && <div className="mb-4 rounded-lg border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
+
+        <form className="flex gap-2 mb-4" onSubmit={submitSearch}>
+          <input className="input flex-1 h-10" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索自己的115片库…" />
+          <button className="btn-primary" type="submit">搜索</button>
+          {activeQuery && <button className="btn-ghost" type="button" onClick={()=>{setQuery('');setActiveQuery('');}}>清除</button>}
+        </form>
+
+        {!activeQuery && <div className="flex gap-2 mb-5">
+          {([['all','全部'],['movie','电影'],['tv','剧集']] as const).map(([value,label])=>(
+            <button key={value} className={filter===value?'btn-primary':'btn-ghost'} onClick={()=>setFilter(value)}>{label}</button>
+          ))}
+        </div>}
+
+        <p className="text-xs text-faint mb-4">{activeQuery?`搜索到 ${items.length} 部作品`:`本地索引共 ${total} 部作品`}</p>
+
+        {loading ? <div className="py-20 text-center text-muted">正在读取片库…</div>
+          : items.length===0 ? <Empty activeQuery={activeQuery} canSync={configured&&rootsConfigured} syncing={syncing} sync={sync} />
+          : <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-3 gap-y-5">
+            {items.map(item=><WorkCard key={item.id} item={item} />)}
+          </div>}
+      </main>
+      <SiteFooter />
+    </div>
+  );
+}
+
+function Notice({children}:{children:React.ReactNode}) {
+  return <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-content">{children}</div>;
+}
+
+function WorkCard({item}:{item:LibraryWork}) {
+  return <Link href={`/library/${item.id}`} className="group min-w-0">
+    <div className="aspect-[2/3] rounded-lg overflow-hidden border border-line bg-card relative">
+      {item.posterUrl
+        ? <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy" />
+        : <div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card to-chip">{item.title}</div>}
+      <span className="absolute left-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">115</span>
+      {item.mediaType==='tv' && <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">{item.fileCount} 集</span>}
+    </div>
+    <h2 className="mt-2 text-sm font-medium text-content truncate">{item.title}</h2>
+    <p className="text-xs text-faint truncate">{[item.year,item.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}</p>
+  </Link>;
+}
+
+function Empty({activeQuery,canSync,syncing,sync}:{activeQuery:string;canSync:boolean;syncing:boolean;sync:()=>Promise<void>}) {
+  return <div className="py-20 text-center max-w-md mx-auto">
+    <div className="text-4xl mb-4">🎬</div>
+    <h2 className="text-lg font-semibold text-content">{activeQuery?'我的115里没有找到':'本地片库还是空的'}</h2>
+    <p className="text-sm text-muted mt-2 mb-5">{activeQuery?'换一个片名搜索，或先把影片放进115后重新同步。':'配置115 Cookie与影视目录后，手动同步一次即可建立本地索引。'}</p>
+    {!activeQuery && canSync && <button className="btn-primary" disabled={syncing} onClick={()=>void sync()}>{syncing?'同步中…':'同步115媒体库'}</button>}
+  </div>;
+}

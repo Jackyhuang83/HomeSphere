@@ -2,6 +2,10 @@
 node_modules
 .next
 out
+.data
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 tsconfig.tsbuildinfo
 
 # 版本控制与 CI
@@ -20,3 +24,4 @@ docker-compose.yml
 docs
 README.md
 LICENSE
+THIRD_PARTY_NOTICES.md

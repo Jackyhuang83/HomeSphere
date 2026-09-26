@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Header } from '@/components/header';
 import { RecommendSection } from '@/components/douban-section';
 import { SiteFooter } from '@/components/site-footer';
@@ -11,7 +12,9 @@ export default function HomePage() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
         <section className="mb-7">
           <h1 className="text-3xl sm:text-4xl font-bold text-content">影视发现</h1>
-          <p className="text-sm text-muted mt-2">这里只保留推荐榜单；私人115片库将在下一阶段接入。</p>
+          <p className="text-sm text-muted mt-2">
+            看榜单发现新片；已有内容可进入 <Link href="/library" className="text-accent hover:underline">我的115片库</Link>。
+          </p>
         </section>
         <RecommendSection />
       </main>
