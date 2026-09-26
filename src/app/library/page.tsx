@@ -16,8 +16,10 @@ export default function LibraryPage() {
   const [activeQuery,setActiveQuery]=useState('');
   const [loading,setLoading]=useState(true);
   const [syncing,setSyncing]=useState(false);
+  const [scraping,setScraping]=useState(false);
   const [configured,setConfigured]=useState(false);
   const [rootsConfigured,setRootsConfigured]=useState(false);
+  const [tmdbReady,setTmdbReady]=useState(false);
   const [message,setMessage]=useState('');
 
   const load=useCallback(async()=>{
@@ -34,6 +36,7 @@ export default function LibraryPage() {
       if(!activeQuery) {
         setConfigured((data.configuredProviders || []).includes('115'));
         setRootsConfigured(Boolean(data.mediaRootsConfigured));
+        setTmdbReady(Boolean(data.tmdbConfigured));
       }
     } catch(error) {
       setMessage(error instanceof Error?error.message:'片库读取失败');
@@ -59,6 +62,25 @@ export default function LibraryPage() {
     } finally { setSyncing(false); }
   };
 
+  const scrape=async()=>{
+    if(scraping) return;
+    setScraping(true); setMessage('');
+    try {
+      const res=await fetch('/api/library/scrape',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({limit:100}),
+      });
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.error || 'TMDB整理失败');
+      const s=data.summary;
+      setMessage(`TMDB整理完成：匹配 ${s.matched}，待确认 ${s.review}，失败 ${s.failed}`);
+      await load();
+    } catch(error) {
+      setMessage(error instanceof Error?error.message:'TMDB整理失败');
+    } finally { setScraping(false); }
+  };
+
   const submitSearch=(e:React.FormEvent)=>{
     e.preventDefault();
     setActiveQuery(query.trim());
@@ -71,15 +93,21 @@ export default function LibraryPage() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-5">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-content">我的115片库</h1>
-            <p className="text-sm text-muted mt-1">浏览与搜索只读本地 SQLite；只有同步和播放会访问115。</p>
+            <p className="text-sm text-muted mt-1">日常浏览只读 SQLite；同步访问115，整理海报只访问 TMDB。</p>
           </div>
-          <button className="btn-primary h-10" onClick={()=>void sync()} disabled={syncing || !configured || !rootsConfigured}>
-            {syncing?'同步中…':'同步115'}
-          </button>
+          <div className="flex gap-2">
+            <button className="btn-ghost h-10 flex-1 sm:flex-none" onClick={()=>void sync()} disabled={syncing || !configured || !rootsConfigured}>
+              {syncing?'同步中…':'同步115'}
+            </button>
+            <button className="btn-primary h-10 flex-1 sm:flex-none" onClick={()=>void scrape()} disabled={scraping || !tmdbReady}>
+              {scraping?'整理中…':'整理海报'}
+            </button>
+          </div>
         </div>
 
         {!configured && <Notice>尚未配置 <code>HOMESPHERE_115_COOKIE</code>。</Notice>}
         {configured && !rootsConfigured && <Notice>尚未配置 <code>HOMESPHERE_115_MEDIA_DIRS</code>；请指定具体影视目录，不能使用根目录 /。</Notice>}
+        {!tmdbReady && <Notice>尚未配置 <code>TMDB_API_TOKEN</code>；115片库仍可使用，但不会自动补海报和简介。</Notice>}
         {message && <div className="mb-4 rounded-lg border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
 
         <form className="flex gap-2 mb-4" onSubmit={submitSearch}>
@@ -111,18 +139,30 @@ function Notice({children}:{children:React.ReactNode}) {
   return <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-content">{children}</div>;
 }
 
+function posterSrc(url?:string):string|undefined {
+  return url ? `/api/image/${encodeURIComponent(url)}` : undefined;
+}
+
 function WorkCard({item}:{item:LibraryWork}) {
-  return <Link href={`/library/${item.id}`} className="group min-w-0">
-    <div className="aspect-[2/3] rounded-lg overflow-hidden border border-line bg-card relative">
-      {item.posterUrl
-        ? <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy" />
-        : <div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card to-chip">{item.title}</div>}
-      <span className="absolute left-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">115</span>
-      {item.mediaType==='tv' && <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">{item.fileCount} 集</span>}
-    </div>
-    <h2 className="mt-2 text-sm font-medium text-content truncate">{item.title}</h2>
-    <p className="text-xs text-faint truncate">{[item.year,item.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}</p>
-  </Link>;
+  const poster=posterSrc(item.posterUrl);
+  const needsFix=item.scrapeStatus==='review'||item.scrapeStatus==='failed';
+  return <div className="min-w-0">
+    <Link href={`/library/${item.id}`} className="group block">
+      <div className="aspect-[2/3] rounded-lg overflow-hidden border border-line bg-card relative">
+        {poster
+          ? <img src={poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy" />
+          : <div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card to-chip">{item.title}</div>}
+        <span className="absolute left-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">115</span>
+        {item.mediaType==='tv' && <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">{item.fileCount} 集</span>}
+        {item.scrapeStatus==='pending' && <span className="absolute top-1.5 right-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">待整理</span>}
+      </div>
+      <h2 className="mt-2 text-sm font-medium text-content truncate">{item.title}</h2>
+      <p className="text-xs text-faint truncate">{[item.year,item.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}</p>
+    </Link>
+    {needsFix && <Link href={`/library/${item.id}/match`} className="mt-1 inline-block text-xs text-warning hover:underline">
+      {item.scrapeStatus==='review'?'需要确认匹配':'识别失败，手动修正'}
+    </Link>}
+  </div>;
 }
 
 function Empty({activeQuery,canSync,syncing,sync}:{activeQuery:string;canSync:boolean;syncing:boolean;sync:()=>Promise<void>}) {

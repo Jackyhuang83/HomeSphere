@@ -68,7 +68,7 @@ function indexVideo(provider:CloudProviderKind,remotePath:string,entry:CloudEntr
 
   upsertWork({
     id:workId, provider, groupKey, title:parsed.title, year:parsed.year,
-    mediaType:parsed.mediaType, updatedAt:now,
+    mediaType:parsed.mediaType, scrapeStatus:'pending', manualMatch:false, updatedAt:now,
   });
   upsertMedia({
     id:makeMediaId(provider,remotePath), workId, provider, remoteId:entry.id, token:entry.token,

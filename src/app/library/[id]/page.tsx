@@ -36,10 +36,16 @@ export default function WorkPage() {
   if(error) return <Centered text={error}/>;
   if(!work) return <Centered text="正在读取作品…"/>;
 
+  const poster=work.posterUrl?`/api/image/${encodeURIComponent(work.posterUrl)}`:undefined;
+
   return <div className="min-h-screen flex flex-col">
     <Header />
     <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
-      <Link href="/library" className="text-sm text-muted hover:text-content">← 返回片库</Link>
+      <div className="flex items-center gap-3">
+        <Link href="/library" className="text-sm text-muted hover:text-content">← 返回片库</Link>
+        <Link href={`/library/${work.id}/match`} className="text-sm text-muted hover:text-content ml-auto">修正TMDB</Link>
+      </div>
+
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
         <div>
           <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
@@ -47,12 +53,18 @@ export default function WorkPage() {
               ? <video key={selected.id} src={`/api/play/${encodeURIComponent(selected.id)}`} controls playsInline preload="metadata" className="w-full h-full bg-black" />
               : <span className="text-white/50 text-sm">没有可播放文件</span>}
           </div>
-          <p className="mt-2 text-xs text-faint">当前为浏览器原生播放；不支持的 MKV/编码会在后续播放器阶段完善。视频数据由115直链直接传给设备。</p>
+          <p className="mt-2 text-xs text-faint">当前为浏览器原生播放；MKV、特殊编码和字幕会在后续播放器阶段完善。</p>
         </div>
 
         <aside className="card p-4">
-          <h1 className="text-xl font-semibold text-content">{work.title}</h1>
-          <p className="text-sm text-muted mt-1">{[work.year,work.mediaType==='movie'?'电影':'剧集',`${work.fileCount} 个文件`].filter(Boolean).join(' · ')}</p>
+          <div className="flex gap-3">
+            {poster && <img src={poster} alt={work.title} className="w-24 aspect-[2/3] object-cover rounded-lg shrink-0" />}
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold text-content">{work.title}</h1>
+              <p className="text-sm text-muted mt-1">{[work.year,work.mediaType==='movie'?'电影':'剧集',work.tmdbId?`TMDB ${work.tmdbId}`:'未匹配TMDB'].filter(Boolean).join(' · ')}</p>
+            </div>
+          </div>
+          {work.overview && <p className="text-sm text-muted leading-relaxed mt-4">{work.overview}</p>}
           {selected && <div className="mt-4">
             <div className="text-xs text-faint mb-1">当前文件</div>
             <div className="text-sm text-content break-all">{selected.filename}</div>
@@ -70,16 +82,6 @@ export default function WorkPage() {
             </button>)}
           </div>
         </div>)}
-      </section>}
-
-      {work.mediaType==='movie' && work.files.length>1 && <section className="mt-6">
-        <h2 className="text-sm font-semibold text-content mb-2">文件版本</h2>
-        <div className="space-y-2">
-          {work.files.map(file=><button key={file.id} onClick={()=>setSelected(file)}
-            className={`w-full text-left p-3 rounded-lg border ${selected?.id===file.id?'border-accent bg-accent/10':'border-line bg-card'}`}>
-            <span className="text-sm text-content break-all">{file.filename}</span>
-          </button>)}
-        </div>
       </section>}
     </main>
   </div>;
