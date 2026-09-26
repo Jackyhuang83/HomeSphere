@@ -555,17 +555,11 @@ function PlaybackPanel() {
   const store = useAppStore();
   return (
     <section>
-      <SectionTitle title="播放与过滤" />
+      <SectionTitle title="播放" />
       <div className="space-y-3">
         <ToggleRow
-          label="广告过滤"
-          description="过滤 m3u8 中的广告分片"
-          checked={store.adFilter}
-          onChange={(v) => store.updateSettings({ adFilter: v })}
-        />
-        <ToggleRow
           label="自动连播"
-          description="单集播放结束后自动播放下一集"
+          description="剧集播放结束后自动播放下一集"
           checked={store.autoplayNext}
           onChange={(v) => store.updateSettings({ autoplayNext: v })}
         />
@@ -630,17 +624,11 @@ function HomePanel() {
   const store = useAppStore();
   return (
     <section>
-      <SectionTitle title="首页与内容过滤" />
+      <SectionTitle title="首页推荐" />
       <div className="space-y-3">
         <ToggleRow
-          label="成人内容过滤"
-          description="过滤“伦理片”等分类的结果"
-          checked={store.yellowFilter}
-          onChange={(v) => store.updateSettings({ yellowFilter: v })}
-        />
-        <ToggleRow
-          label="首页推荐"
-          description="在首页展示推荐内容"
+          label="显示发现内容"
+          description="在首页展示影视推荐和榜单；这些内容不会作为点播源"
           checked={store.doubanEnabled}
           onChange={(v) => store.updateSettings({ doubanEnabled: v })}
         />
