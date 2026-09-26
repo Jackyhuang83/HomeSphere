@@ -25,12 +25,11 @@ HomeSphere 的目标不是寻找“功能最多”的 Bridge，而是寻找：
 - API Token 可按权限授权，包括只读范围；
 - 官方明确限制115并发/请求节奏，方向符合 HomeSphere 的保守策略。
 
-当前没有把它硬绑定为 HomeSphere Bridge 的原因：
+进一步核对官方配套媒体插件后，CloudDrive2 更适合做115open文件系统层：它的媒体直播放式偏向“把服务端路径映射回客户端自己的 CloudDrive2 App”，相关 Resolve 接口返回路径而不是浏览器可用的最终直链 URL。
 
-- 还需要在实际版本中验证：是否有稳定、公开、适合第三方直接调用的“取115最终直链并返回302”的接口契约；
-- 如果只能通过文件读取/WebDAV获得字节，则会让视频经过服务器，不符合 HomeSphere 的播放目标。
+因此 CloudDrive2 **不能单独完成 HomeSphere 所需的浏览器 302 Bridge 契约**。如果未来使用它，需要再加一个明确、可审计的 resolver 适配层；否则通过挂载/WebDAV读取电影字节会让服务器进入数据通路，不符合 HomeSphere 目标。
 
-**状态：第一优先验证对象，但暂不写死。**
+**状态：可作为115open底层，但不是独立默认 Bridge。**
 
 ### OpenStrm
 
@@ -94,10 +93,12 @@ HomeSphere：内网解析 → 最终 CDN 302
 当前优先级：
 
 ```text
-1. 验证 CloudDrive2 是否能满足直链 resolver
-2. 若不能，验证官方115open Bridge 的独立实现
-3. OpenStrm 作为 Cookie 模式兼容候选
-4. QMediaSync API 形态作为实现参考
+1. 寻找/验证“115open + STRM + 3xx resolver”的轻量独立 Bridge
+2. CloudDrive2 可作为115open文件系统底层，但需要 resolver 适配层
+3. QMediaSync 的 /115/newurl 作为 resolver 接口形态参考
+4. OpenStrm 作为 Cookie 模式兼容候选
 ```
+
+所有候选必须按 `BRIDGE_VALIDATION.md` 完成真实115账号 + iPhone测试，才能升级为 PASS。
 
 在没有完成真实115账号、真实大文件、iPhone Safari 的端到端测试之前，不把任何第三方 Bridge 声明为“默认已验证”。
