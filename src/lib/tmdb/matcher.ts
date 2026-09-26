@@ -14,7 +14,7 @@ export async function matchWork(work: LibraryWork, signal?: AbortSignal): Promis
   if (results.length === 0) return { candidate: null, confidence: 'none', reason: 'TMDB 无匹配' };
 
   const scored = results.map((item) => score(item, work)).sort((a, b) => b.score - a.score);
-  let pick = scored[0];
+  const pick = scored[0];
   const second = scored[1];
 
   if (pick.titleEqual && pick.yearEqual) return { candidate: pick.item, confidence: 'high', reason: '标题和年份都匹配' };
