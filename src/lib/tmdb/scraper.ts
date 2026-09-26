@@ -28,6 +28,7 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
         summary.review++;
         continue;
       }
+      const confidence: 'high'|'medium' = result.confidence === 'high' ? 'high' : 'medium';
       const details=await getTmdbDetails(result.candidate.mediaType,result.candidate.id,signal) || result.candidate;
       setWorkMatch(work.id,{
         title:details.title || work.title,
@@ -39,7 +40,7 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
         backdropUrl:details.backdropUrl,
         overview:details.overview,
         scrapeStatus:'matched',
-        matchConfidence:result.confidence,
+        matchConfidence:confidence,
         manualMatch:false,
       });
       summary.matched++;
