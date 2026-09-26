@@ -45,8 +45,6 @@ function LiveContent() {
   const liveEnvSources = useAppStore((s) => s.liveEnvSources);
   const liveSubscriptions = useAppStore((s) => s.liveSubscriptions);
   const liveFavorites = useAppStore((s) => s.liveFavorites);
-  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
-  const customImageProxy = useAppStore((s) => s.customImageProxy);
   const { verified } = useAuth();
   const [copied, setCopied] = useState(false);
   // 移动端频道抽屉开合
@@ -209,7 +207,7 @@ function LiveContent() {
     );
   }
 
-  const logo = buildImageUrl(currentChannel?.logo, imageProxyMode, customImageProxy);
+  const logo = buildImageUrl(currentChannel?.logo);
   const isFavorite = currentChannel ? liveFavorites.includes(currentChannel.url) : false;
 
   return (

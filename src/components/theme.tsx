@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
  */
 
 export type ThemeChoice = 'light' | 'dark' | 'system';
-const STORAGE_KEY = 'libretv-theme';
+const STORAGE_KEY = 'homesphere-theme';
 
 interface ThemeContextValue {
   theme: ThemeChoice;

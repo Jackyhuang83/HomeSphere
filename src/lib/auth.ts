@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
  * - 登录接口只接受 POST body，不再把明文密码放 query。
  */
 
-export const SESSION_COOKIE = 'ltv_session';
+export const SESSION_COOKIE = 'homesphere_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
 
 export function getPassword(): string {

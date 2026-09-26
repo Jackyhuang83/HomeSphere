@@ -1,9 +1,9 @@
-name: Slim Core CI
+name: CI
 
 on:
   push:
     branches:
-      - refactor/slim-core
+      - main
   pull_request:
     branches:
       - main

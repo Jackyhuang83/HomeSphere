@@ -12,19 +12,8 @@ export function formatTime(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export function buildImageUrl(
-  url: string | undefined,
-  mode: 'direct' | 'proxy' | 'custom',
-  customTemplate: string
-): string | undefined {
-  if (!url) return undefined;
-  if (mode === 'proxy') return `/api/proxy/${encodeURIComponent(url)}`;
-  if (mode === 'custom' && customTemplate) {
-    return customTemplate.includes('{url}')
-      ? customTemplate.replace('{url}', encodeURIComponent(url))
-      : customTemplate + encodeURIComponent(url);
-  }
-  return url;
+export function buildImageUrl(url: string | undefined): string | undefined {
+  return url ? `/api/image/${encodeURIComponent(url)}` : undefined;
 }
 
 export function validateSourceUrl(url: string): boolean {
