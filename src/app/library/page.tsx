@@ -9,6 +9,19 @@ import type { LibraryWork } from '@/lib/library/types';
 type Filter='all'|'movie'|'tv';
 type LibraryMode='strm'|'direct115';
 
+interface BridgeHealthView {
+  applicable:boolean;
+  ready:boolean;
+  playbackMode:'resolve'|'direct';
+  strmRoot:string;
+  strmRootReadable:boolean;
+  allowedHosts:string[];
+  credentialsPresentInHomeSphere:boolean;
+  errors:string[];
+  warnings:string[];
+  sampleAvailable:boolean;
+}
+
 export default function LibraryPage() {
   const [items,setItems]=useState<LibraryWork[]>([]);
   const [total,setTotal]=useState(0);
@@ -22,6 +35,8 @@ export default function LibraryPage() {
   const [sourceLabel,setSourceLabel]=useState('STRM');
   const [libraryConfigured,setLibraryConfigured]=useState(false);
   const [tmdbReady,setTmdbReady]=useState(false);
+  const [bridgeHealth,setBridgeHealth]=useState<BridgeHealthView|null>(null);
+  const [probing,setProbing]=useState(false);
   const [message,setMessage]=useState('');
 
   const load=useCallback(async()=>{
@@ -48,6 +63,18 @@ export default function LibraryPage() {
 
   useEffect(()=>{void load();},[load]);
 
+  const loadBridgeHealth=useCallback(async()=>{
+    try {
+      const res=await fetch('/api/library/bridge/status',{cache:'no-store'});
+      const data=await res.json();
+      if(res.ok) setBridgeHealth(data as BridgeHealthView);
+    } catch {
+      // 状态卡不是片库主流程，失败时不阻断页面。
+    }
+  },[]);
+
+  useEffect(()=>{void loadBridgeHealth();},[loadBridgeHealth]);
+
   const sync=async()=>{
     if(syncing) return;
     setSyncing(true); setMessage('');
@@ -61,7 +88,7 @@ export default function LibraryPage() {
       setMessage(`同步完成：${s.worksIndexed ?? 0} 部作品，${files} 个媒体条目，扫描 ${s.directoriesScanned ?? 0} 个目录${invalid}`);
       setActiveQuery('');
       setQuery('');
-      await load();
+      await Promise.all([load(),loadBridgeHealth()]);
     } catch(error) {
       setMessage(error instanceof Error?error.message:'同步失败');
     } finally { setSyncing(false); }
@@ -84,6 +111,20 @@ export default function LibraryPage() {
     } catch(error) {
       setMessage(error instanceof Error?error.message:'TMDB整理失败');
     } finally { setScraping(false); }
+  };
+
+  const probeBridge=async()=>{
+    if(probing) return;
+    setProbing(true); setMessage('');
+    try {
+      const res=await fetch('/api/library/bridge/probe',{method:'POST'});
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.error || 'Bridge 探测失败');
+      setMessage(`Bridge 探测通过：${data.bridgeHost} → ${data.finalHost}，${data.durationMs} ms。未回显临时播放URL。`);
+      await loadBridgeHealth();
+    } catch(error) {
+      setMessage(error instanceof Error?error.message:'Bridge 探测失败');
+    } finally { setProbing(false); }
   };
 
   const submitSearch=(e:React.FormEvent)=>{
@@ -132,6 +173,10 @@ export default function LibraryPage() {
         {!tmdbReady && <Notice>尚未配置 <code>TMDB_API_TOKEN</code>；片库仍可使用，但不会自动补海报和简介。</Notice>}
         {message && <div className="mb-4 rounded-lg border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
 
+        {libraryMode==='strm' && bridgeHealth && (
+          <BridgeStatusCard health={bridgeHealth} probing={probing} onProbe={probeBridge} />
+        )}
+
         <form className="flex gap-2 mb-4" onSubmit={submitSearch}>
           <input className="input flex-1 h-10" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索自己的片库…" />
           <button className="btn-primary" type="submit">搜索</button>
@@ -155,6 +200,39 @@ export default function LibraryPage() {
       <SiteFooter />
     </div>
   );
+}
+
+function BridgeStatusCard({health,probing,onProbe}:{health:BridgeHealthView;probing:boolean;onProbe:()=>Promise<void>}) {
+  const issues=[...health.errors,...health.warnings];
+  return <section className="mb-5 rounded-xl border border-line bg-card p-4">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full ${health.ready?'bg-green-500':'bg-warning'}`} />
+          <h2 className="text-sm font-semibold text-content">
+            Media Bridge：{health.ready?'安全配置已就绪':'需要处理'}
+          </h2>
+        </div>
+        <p className="text-xs text-muted mt-1 break-all">
+          {health.playbackMode==='resolve'?'服务端内网解析':'Direct兼容模式'} · STRM {health.strmRootReadable?'可读':'不可读'}
+          {health.allowedHosts.length?` · Allowlist: ${health.allowedHosts.join(', ')}`:''}
+        </p>
+      </div>
+      <button
+        className="btn-ghost h-9 shrink-0"
+        onClick={()=>void onProbe()}
+        disabled={probing || !health.ready || !health.sampleAvailable}
+      >
+        {probing?'探测中…':'测试播放链路'}
+      </button>
+    </div>
+    {!health.sampleAvailable && health.ready && (
+      <p className="text-xs text-faint mt-3">先同步至少一个 STRM 后，才能做真实播放链路探测。</p>
+    )}
+    {issues.length>0 && <div className="mt-3 space-y-1">
+      {issues.map((item,index)=><p key={index} className="text-xs text-warning">• {item}</p>)}
+    </div>}
+  </section>;
 }
 
 function Notice({children}:{children:React.ReactNode}) {
