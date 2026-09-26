@@ -138,7 +138,7 @@ export function searchWorks(query:string,limit=60,provider?:CloudProviderKind):L
   if(!q) return [];
   const pattern=`%${escapeLike(q)}%`;
   const providerClause=provider?'AND w.provider=?':'';
-  const args:unknown[]=provider
+  const args:Array<string|number>=provider
     ? [pattern,pattern,provider,q,clamp(limit,1,100)]
     : [pattern,pattern,q,clamp(limit,1,100)];
   const rows=database().prepare(`
