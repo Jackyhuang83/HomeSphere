@@ -13,7 +13,7 @@ export function formatTime(seconds: number): string {
 }
 
 export function buildImageUrl(url: string | undefined): string | undefined {
-  return url ? `/api/proxy/${encodeURIComponent(url)}` : undefined;
+  return url ? `/api/image/${encodeURIComponent(url)}` : undefined;
 }
 
 export function validateSourceUrl(url: string): boolean {
