@@ -37,9 +37,6 @@ export interface LiveProbeEntry {
 interface AppState {
   doubanEnabled: boolean;
   recommendSource: 'douban' | 'bangumi' | 'hot-list';
-  imageProxyMode: 'direct' | 'proxy' | 'custom';
-  customImageProxy: string;
-
   liveEnvSources: LiveSourceConfig[];
   liveEnvKeysSeen: string[];
   liveSubscriptions: LiveSubscription[];
@@ -61,7 +58,7 @@ interface AppState {
   clearLiveRecent: () => void;
   setLiveProbeResults: (entries: Record<string, LiveProbeEntry>) => void;
   clearLiveProbeResults: () => void;
-  updateSettings: (patch: Partial<Pick<AppState, 'doubanEnabled' | 'recommendSource' | 'imageProxyMode' | 'customImageProxy'>>) => void;
+  updateSettings: (patch: Partial<Pick<AppState, 'doubanEnabled' | 'recommendSource'>>) => void;
 }
 
 export function allLiveSources(state: Pick<AppState, 'liveEnvSources' | 'liveSubscriptions'>): LiveSourceConfig[] {
@@ -81,9 +78,6 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       doubanEnabled: true,
       recommendSource: 'hot-list',
-      imageProxyMode: 'proxy',
-      customImageProxy: '',
-
       liveEnvSources: [],
       liveEnvKeysSeen: [],
       liveSubscriptions: [],
@@ -183,8 +177,6 @@ export const useAppStore = create<AppState>()(
       partialize: (s) => ({
         doubanEnabled: s.doubanEnabled,
         recommendSource: s.recommendSource,
-        imageProxyMode: s.imageProxyMode,
-        customImageProxy: s.customImageProxy,
         liveEnvKeysSeen: s.liveEnvKeysSeen,
         liveSubscriptions: s.liveSubscriptions,
         liveSelectedUrls: s.liveSelectedUrls,

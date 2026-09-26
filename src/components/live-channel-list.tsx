@@ -71,8 +71,6 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
   // 精确订阅：避免任何 store 字段变化（尤其测活节流写回）引发本组件重渲染
   const liveFavorites = useAppStore((s) => s.liveFavorites);
   const liveRecent = useAppStore((s) => s.liveRecent);
-  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
-  const customImageProxy = useAppStore((s) => s.customImageProxy);
 
   const [view, setView] = useState<View>('all');
   const [group, setGroup] = useState<string>('');
@@ -397,11 +395,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
                   cursor={cursor === vi.index}
                   isFav={favSet.has(filtered[vi.index].url)}
                   probe={probeResults.get(filtered[vi.index].url)}
-                  logoUrl={buildImageUrl(
-                    filtered[vi.index].logo,
-                    imageProxyMode,
-                    customImageProxy
-                  )}
+                  logoUrl={buildImageUrl(filtered[vi.index].logo)}
                   onSelect={onSelect}
                   onRemoveRecent={view === 'recent' ? removeRecent : undefined}
                 />

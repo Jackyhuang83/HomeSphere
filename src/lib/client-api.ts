@@ -14,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-const UNAUTHORIZED_EVENT = 'libretv:unauthorized';
+const UNAUTHORIZED_EVENT = 'homesphere:unauthorized';
 export const STATUS_QUERY_KEY = ['app-status'] as const;
 
 export function onUnauthorized(handler: (event: CustomEvent) => void): () => void {

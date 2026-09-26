@@ -1,14 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAppStore } from '@/lib/store';
 import { buildImageUrl, cn } from '@/lib/utils';
 
 export function RecommendCard({ item }: { item: { title: string; cover: string; rating?: string } }) {
-  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
-  const customImageProxy = useAppStore((s) => s.customImageProxy);
   const [failed, setFailed] = useState(false);
-  const src = buildImageUrl(item.cover, imageProxyMode, customImageProxy);
+  const src = buildImageUrl(item.cover);
   useEffect(() => setFailed(false), [src]);
 
   return (
