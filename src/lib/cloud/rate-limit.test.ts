@@ -1,0 +1,3 @@
+import { describe, expect, it } from 'vitest';
+import { ProviderRateGate } from './rate-limit';
+describe('ProviderRateGate',()=>{it('限制并发数',async()=>{const gate=new ProviderRateGate(1,1000);let active=0,maxActive=0;await Promise.all(Array.from({length:4},()=>gate.schedule(async()=>{active++;maxActive=Math.max(maxActive,active);await new Promise(r=>setTimeout(r,10));active--;})));expect(maxActive).toBe(1);});it('即使允许并发，也限制请求启动频率',async()=>{const gate=new ProviderRateGate(2,20);const starts:number[]=[];await Promise.all(Array.from({length:3},()=>gate.schedule(async()=>{starts.push(Date.now());await new Promise(r=>setTimeout(r,5));})));expect(starts[1]-starts[0]).toBeGreaterThanOrEqual(40);expect(starts[2]-starts[1]).toBeGreaterThanOrEqual(40);});});

@@ -18,9 +18,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
+ENV ONEHUBX_DATA_DIR=/data
 
-# 非 root 用户
-RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+RUN addgroup -S nodejs && adduser -S nextjs -G nodejs \
+  && mkdir -p /data \
+  && chown -R nextjs:nodejs /data
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
@@ -28,5 +30,6 @@ COPY --from=builder /app/public ./public
 
 USER nextjs
 
+VOLUME ["/data"]
 EXPOSE 8080
 CMD ["node", "server.js"]
