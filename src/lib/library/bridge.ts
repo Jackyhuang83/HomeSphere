@@ -1,5 +1,5 @@
 import { checkUpstreamAllowed } from '@/lib/ssrf';
-import { validateStrmPlaybackUrl } from './strm';
+import { validateStrmPlaybackUrl } from './strm-url';
 
 export type StrmPlaybackMode = 'resolve' | 'direct';
 
