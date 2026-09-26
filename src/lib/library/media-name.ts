@@ -3,3 +3,9 @@ const VIDEO_EXT=/\.(mkv|mp4|m4v|mov|avi|ts|m2ts|webm|flv)$/i;const EPISODE=/(?:^
 export interface ParsedMediaName{title:string;year?:string;mediaType:MediaType;season?:number;episode?:number;}
 export function parseMediaName(fileName:string):ParsedMediaName{const stem=fileName.replace(VIDEO_EXT,'');const episode=EPISODE.exec(stem);const year=YEAR.exec(stem)?.[1];const cutAt=[episode?.index,year?stem.indexOf(year):undefined].filter((v):v is number=>typeof v==='number'&&v>=0).reduce((min,v)=>Math.min(min,v),stem.length);const rawTitle=stem.slice(0,cutAt).replace(NOISE,' ');const title=rawTitle.replace(/[._]+/g,' ').replace(/\s*-\s*/g,' ').replace(/\s+/g,' ').trim()||stem;return{title,year,mediaType:episode?'tv':'movie',season:episode?Number(episode[1]):undefined,episode:episode?Number(episode[2]):undefined};}
 export function isVideoFile(name:string){return VIDEO_EXT.test(name);}
+
+
+export function buildGroupKey(mediaType: 'movie' | 'tv', title: string, year?: string): string {
+  const normalized = title.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return `${mediaType}:${normalized}:${year ?? ''}`;
+}
