@@ -1,20 +1,124 @@
 # HomeSphere
 
-HomeSphere 是一个面向**本人 / 家人 / 少量朋友**使用的私人家庭影视门户。
+HomeSphere 是一个面向**本人 / 家人 / 少量朋友**的私人家庭影视门户。
 
-项目从 LibreTV 精简而来，但已经移除公网 VOD 聚合、Apple CMS、多源点播搜索、TVBOX / SourceList 等体系。当前方向只有三件事：
+项目从 LibreTV 精简而来，已经移除公网 VOD 聚合、Apple CMS、多源点播搜索、TVBOX / SourceList 等体系。HomeSphere 当前只负责三件事：
 
-1. **我的片库**：115 云盘作为主要媒体存储，本地 SQLite 只保存索引与元数据。
+1. **私人片库**：读取本地 STRM 索引，使用 SQLite + TMDB 构建海报墙。
 2. **影视发现**：豆瓣、Bangumi、影视热榜用于发现内容，不作为公网点播源。
-3. **电视直播**：保留 IPTV 的 M3U、EPG、频道搜索、收藏、测活和直播播放器。
+3. **电视直播**：M3U、EPG、频道搜索、收藏、测活和直播播放器。
 
-> 目标不是做公开影视站，而是做一个轻量、可维护、适合 iPhone / iPad / 浏览器访问的私人家庭媒体入口。
+> 生产默认原则：**HomeSphere 不直接持有115账号凭据，也不扫描115网盘。**
+
+---
+
+## 推荐架构
+
+```text
+                    115
+                     │
+               官方授权/API
+                     │
+              ┌──────▼──────┐
+              │ Media Bridge│
+              │             │
+              │ ·115授权     │
+              │ ·增量同步    │
+              │ ·生成STRM    │
+              │ ·播放时302   │
+              └──────┬──────┘
+                     │
+               STRM 只读目录
+                     │
+              ┌──────▼──────┐
+              │ HomeSphere  │
+              │             │
+              │ SQLite      │
+              │ TMDB        │
+              │ 海报墙       │
+              │ 推荐        │
+              │ IPTV        │
+              └──────┬──────┘
+                     │
+                 iPhone/iPad
+```
+
+职责严格分离：
+
+| 组件 | 接触115凭据 | 扫描115 | 保存元数据 | WebUI |
+|---|---:|---:|---:|---:|
+| Media Bridge | 是 | 是 | 仅生成STRM所需 | 否 |
+| HomeSphere | **否** | **否** | SQLite/TMDB | 是 |
+
+详细接口契约见：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)。
+
+---
+
+## 为什么默认使用 STRM
+
+日常操作：
+
+```text
+打开首页
+翻海报
+搜索
+分类
+查看详情
+```
+
+全部只发生在：
+
+```text
+HomeSphere → SQLite / TMDB
+```
+
+不会产生115目录请求。
+
+只有两类动作涉及 Media Bridge：
+
+- Bridge 自己的低频/增量目录同步；
+- 用户真正点击播放。
+
+这比让 WebUI、媒体整理器和其他工具分别访问115更简单，也更容易控制调用面。
+
+---
+
+## 播放链路
+
+STRM 文件内容保存 Bridge 的签名解析 URL，例如：
+
+```text
+https://media.example.com/play/<signed-token>
+```
+
+播放时：
+
+```text
+iPhone / Browser
+       │
+       │ GET /api/play/<media-id>
+       ▼
+HomeSphere
+       │
+       │ 302
+       ▼
+Media Bridge signed play URL
+       │
+       │ 302
+       ▼
+115 CDN temporary URL
+       │
+       ▼
+iPhone / Browser
+```
+
+HomeSphere 不代理视频字节，也不需要115 Cookie、Token、file_id 或 pickcode。
 
 ---
 
 ## 当前状态
 
-当前版本：**0.1.0**
+当前版本：**0.1.x**
 
 ### 已完成
 
@@ -24,158 +128,84 @@ HomeSphere 是一个面向**本人 / 家人 / 少量朋友**使用的私人家�
 - iPhone / iPad / 桌面响应式 WebUI
 - 豆瓣 / Bangumi / 影视热榜
 - IPTV：M3U / EPG / 搜索 / 收藏 / 最近观看 / 测活
-- 115 Cloud Provider 抽象
-- 115 指定目录只读扫描
-- 本地 SQLite 媒体索引
+- **STRM 作为生产默认片库来源**
+- STRM 只读目录扫描
+- SQLite 本地作品/文件索引
 - 电影 / 剧集作品级归组
-- 手动同步 115 片库
-- 登录后通过 `/api/play/:id` 获取 115 临时直链并 HTTP 302
-- Docker `/data` 持久化
+- 删除失效 STRM 的本地索引清理
 - TMDB 自动匹配、海报、背景图与简介
-- 低置信候选进入人工确认，不自动覆盖
-- 手动搜索 TMDB 并指定正确条目
+- 低置信匹配人工纠错
+- 登录后播放 302
+- Docker `/data` 持久化
+- Docker 只读 `/media` STRM 挂载
+- 115 Direct 保留为高级兼容模式
 - GitHub Actions：test + typecheck + production build
 
 ### 下一阶段
 
-- 推荐榜单 → “搜我的115”
-- 更完整的点播播放器与字幕
-- 增量同步 / 删除检测
-- Quark Provider 接入（接口已预留）
+- 推荐榜单 → “搜我的片库”
+- 更完整的播放器与字幕
+- Bridge 实现/部署模板验证
+- STRM/NFO/字幕协同
+- Quark 作为未来 Bridge 后端来源之一
 
 ---
 
-## 架构
-
-```text
-                     HomeSphere
-                        │
-        ┌───────────────┼────────────────┐
-        │               │                │
-      发现页           私人片库           IPTV
- 豆瓣/Bangumi/热榜      │           M3U / EPG / 测活
-                        │
-                   SQLite 本地索引
-                        │
-                仅同步 / 播放时访问115
-                        │
-                      115
-                        │
-        播放时返回临时直链 → HTTP 302
-                        │
-                   Browser / iPhone
-```
-
-核心原则：
-
-> **静态数据本地化，115 只负责最后一公里的视频文件。**
-
-日常浏览、搜索、分类都读取本地 SQLite，不会因为刷新海报墙反复扫描 115。只有手动同步和真正开始播放时才会访问 115。
-
----
-
-## 115 数据模型
+## STRM 数据模型
 
 HomeSphere 不采用“一文件一海报”。
 
 ```text
 作品 Work
 ├── 电影
-│   └── 一个或多个视频版本
+│   └── 一个或多个 STRM
 └── 剧集
-    ├── Season 1
-    │   ├── Episode 1
-    │   ├── Episode 2
-    │   └── ...
-    └── Season 2
+    ├── Season 01
+    │   ├── S01E01.strm
+    │   └── S01E02.strm
+    └── Season 02
 ```
 
 例如：
 
 ```text
-Silo.S01E01.2160p.mkv
-Silo.S01E02.2160p.mkv
-Silo.S01E03.2160p.mkv
+/media/TV/Silo/Season 01/Silo.S01E01.strm
+/media/TV/Silo/Season 01/Silo.S01E02.strm
+/media/TV/Silo/Season 01/Silo.S01E03.strm
 ```
 
-会归为一部 **Silo**，而不是三张海报。
+会归成一部 **Silo**，而不是三张海报。
 
-当前文件名解析支持常见的：
+支持常见命名：
 
 - `S01E03`
 - `1x03`
 - `第1季第3集`
-- 年份：`2024`
-- 常见 2160p / 1080p / WEB-DL / BluRay / REMUX / HEVC 等标签清理
-
-TMDB 会进一步修正片名、年份、海报和简介。自动整理只接受高/中置信匹配；低置信候选会保留为“需要确认”，不会自动写入错误元数据。
-
----
-
-## TMDB 配置
-
-HomeSphere 使用 TMDB v3 API，并使用 API Read Access Token 作为 Bearer Token。
-
-在服务器 `.env` 中配置：
-
-```env
-TMDB_API_TOKEN=你的_API_Read_Access_Token
-TMDB_LANGUAGE=zh-CN
-```
-
-使用流程：
-
-```text
-同步115
-  ↓
-生成本地作品索引
-  ↓
-点击「整理海报」
-  ↓
-TMDB 搜索
-  ├─ 高/中置信 → 自动入库
-  └─ 低置信/失败 → 人工「修正TMDB」
-```
-
-“整理海报”只处理尚未整理的作品；已经进入人工确认的低置信条目不会在每次整理时反复请求 TMDB。
+- 年份 `2024`
+- 常见 2160p / 1080p / WEB-DL / BluRay / REMUX / HEVC 标签清理
 
 ---
 
 ## 快速开始
 
-### 本地开发
+### 1. 准备 STRM 目录
 
-要求：
-
-- Node.js 22+
-- npm
-
-```bash
-git clone https://github.com/Jackyhuang83/HomeSphere.git
-cd HomeSphere
-
-cp .env.example .env
-npm ci
-npm run dev
-```
-
-默认访问：
+例如宿主机：
 
 ```text
-http://localhost:8080
+./media/
+├── Movies/
+│   └── Dune.Part.Two.2024.strm
+└── TV/
+    └── Silo/
+        └── Season 01/
+            ├── Silo.S01E01.strm
+            └── Silo.S01E02.strm
 ```
 
-本地 SQLite 默认写入：
+每个 `.strm` 第一行是 Bridge 的 HTTP(S) 播放解析 URL。
 
-```text
-./.data/homesphere.sqlite
-```
-
----
-
-## Docker
-
-### 1. 创建配置
+### 2. 配置 HomeSphere
 
 ```bash
 cp .env.example .env
@@ -185,126 +215,122 @@ cp .env.example .env
 
 ```env
 PASSWORD=你的家庭访问密码
-HOMESPHERE_115_COOKIE=你的115 Cookie
-HOMESPHERE_115_MEDIA_DIRS=["/电影","/电视剧"]
+HOMESPHERE_LIBRARY_MODE=strm
+HOMESPHERE_STRM_PATH=./media
+
+# 推荐生产设置：只允许自己的 Bridge 主机
+HOMESPHERE_STRM_ALLOWED_HOSTS=media.example.com
 ```
 
-### 2. 启动
+TMDB 可选：
+
+```env
+TMDB_API_TOKEN=你的_API_Read_Access_Token
+TMDB_LANGUAGE=zh-CN
+```
+
+### 3. 启动
 
 ```bash
 docker compose up -d --build
 ```
 
-数据持久化在 Docker volume：
+访问：
+
+```text
+http://服务器IP:8080
+```
+
+生产环境建议通过 HTTPS 反向代理访问。
+
+---
+
+## Docker 挂载
 
 ```text
 homesphere-data → /data
+./media          → /media:ro
 ```
 
-数据库文件：
+- `/data/homesphere.sqlite`：HomeSphere 本地数据库。
+- `/media`：Bridge 输出的 STRM，只读挂载。
 
-```text
-/data/homesphere.sqlite
-```
-
-升级镜像不会删除片库索引。
+`media/` 已加入 `.gitignore` 与 `.dockerignore`，避免带签名的 STRM URL 被提交到 GitHub 或打入镜像。
 
 ---
 
-## 115 配置
+## TMDB
 
-### HOMESPHERE_115_COOKIE
-
-当前 0.1.x 的 115 Provider 使用**只读 Cookie 方式**访问目录和获取播放直链。
-
-Cookie 属于敏感凭据：
-
-- 只放服务器 `.env`
-- 不要写入 README
-- 不要提交 GitHub
-- 不要贴到 Issue / Actions log
-- Cookie 失效后重新更新服务器环境变量即可
-
-HomeSphere 的 Provider 层已经独立，后续如果切换到合适的 115 OpenAPI，不需要重写片库 UI 和 SQLite 数据模型。
-
-### HOMESPHERE_115_MEDIA_DIRS
-
-必须指定具体影视目录：
+HomeSphere 使用 TMDB v3 API Read Access Token。
 
 ```env
-HOMESPHERE_115_MEDIA_DIRS=["/Movies","/TV"]
+TMDB_API_TOKEN=...
+TMDB_LANGUAGE=zh-CN
 ```
 
-也支持：
-
-```env
-HOMESPHERE_115_MEDIA_DIRS=/Movies,/TV
-```
-
-**不允许配置根目录 `/`。**
-
-这是有意的保护：50TB 网盘如果误扫根目录，会产生大量目录请求，没有必要。
-
-建议按媒体类型整理：
+流程：
 
 ```text
-/电影
-/电视剧
-/纪录片
+同步STRM
+   ↓
+本地作品索引
+   ↓
+整理海报
+   ↓
+TMDB
+   ├─ 高/中置信 → 自动写入
+   └─ 低置信/失败 → 人工修正
 ```
 
-然后只把真正需要进入 HomeSphere 的目录加入配置。
+TMDB 请求不会发生在普通片库浏览过程中。
 
 ---
 
-## 115 请求与同步策略
+## 生产安全边界
 
-HomeSphere 当前采用保守策略：
+HomeSphere 默认：
 
-- 只有手动点击“同步115”才扫描
-- 单并发访问 115
-- 默认请求间隔至少 500 ms
-- 单次同步默认最多 30,000 个条目
-- 单次同步默认最多 5,000 个目录
-- 失败仅做有限重试与退避
-- 浏览 / 搜索片库不访问 115
-- 播放时才请求临时直链
-- 不批量预生成播放 URL
-- 不代理视频字节
+- 不保存115 Cookie/OAuth Token。
+- 不调用115目录接口。
+- 不生成115临时直链。
+- 不代理视频字节。
+- STRM 目录只读。
+- 不跟随 STRM 目录中的符号链接。
+- 单个 STRM 最大 16 KiB。
+- STRM 只允许 HTTP(S)。
+- 可配置 `HOMESPHERE_STRM_ALLOWED_HOSTS`。
+- 登录后的 `/api/play/:id` 才允许播放跳转。
+- `robots.txt` 禁止搜索引擎抓取。
 
-相关配置：
+Media Bridge 是唯一应该持有115授权的服务。
 
-```env
-HOMESPHERE_115_MIN_INTERVAL_MS=500
-HOMESPHERE_115_TIMEOUT_MS=15000
-HOMESPHERE_SYNC_MAX_ENTRIES=30000
-HOMESPHERE_SYNC_MAX_DIRS=5000
-```
-
-这些限制用于降低异常高频访问概率，但不能承诺第三方平台永远不会触发其自身限制。
+这套设计**降低重复和异常调用面，但不能承诺第三方服务永远不会触发其自身限制**。
 
 ---
 
-## 播放路径
+## 高级兼容：115 Direct
 
-```text
-iPhone / Browser
-      │
-      │ GET /api/play/<media-id>
-      ▼
-HomeSphere
-      │
-      │ 向115请求临时直链
-      ▼
-HTTP 302
-      │
-      ▼
-115 CDN ───────────────► iPhone / Browser
+仓库仍保留之前已经验证编译通过的 Direct 115 Provider，主要用于开发、排障和兼容。
+
+它**不是生产默认模式**。
+
+只有显式配置：
+
+```env
+HOMESPHERE_LIBRARY_MODE=direct115
+HOMESPHERE_115_COOKIE=...
+HOMESPHERE_115_MEDIA_DIRS=["/电影","/电视剧"]
 ```
 
-HomeSphere 不作为电影字节的数据转发服务器，因此小型 VPS 也可以作为控制面。
+HomeSphere 才会直接访问115。
 
-当前页面先使用浏览器原生 `<video>` 验证 302 播放链路。MKV、特殊音视频编码、字幕等兼容性会在后续播放器阶段处理。
+切回生产推荐模式：
+
+```env
+HOMESPHERE_LIBRARY_MODE=strm
+```
+
+STRM 与 Direct 115 使用不同 provider namespace，因此数据库里不会把两种来源混在同一海报列表中。
 
 ---
 
@@ -315,36 +341,19 @@ HomeSphere 不作为电影字节的数据转发服务器，因此小型 VPS 也�
 | `PASSWORD` | 是 | - | 家庭访问密码 |
 | `PROXY_SECRET` | 否 | 从 PASSWORD 派生 | Session 签名 |
 | `COOKIE_SECURE` | 否 | 自动判断 | HTTPS Cookie |
-| `HOMESPHERE_DATA_DIR` | 否 | 本地 `.data` / Docker `/data` | SQLite 数据目录 |
-| `HOMESPHERE_115_COOKIE` | 片库需要 | - | 115 服务端凭据 |
-| `HOMESPHERE_115_MEDIA_DIRS` | 片库需要 | - | 要索引的115目录 |
-| `HOMESPHERE_115_MIN_INTERVAL_MS` | 否 | 500 | 115 最小请求间隔 |
-| `HOMESPHERE_115_TIMEOUT_MS` | 否 | 15000 | 115 单请求超时 |
-| `HOMESPHERE_SYNC_MAX_ENTRIES` | 否 | 30000 | 单次同步条目保护阈值 |
-| `HOMESPHERE_SYNC_MAX_DIRS` | 否 | 5000 | 单次同步目录保护阈值 |
-| `TMDB_API_TOKEN` | 海报整理需要 | - | TMDB API Read Access Token |
-| `TMDB_LANGUAGE` | 否 | zh-CN | TMDB 返回语言 |
-| `DEFAULT_LIVE_SOURCES` | 否 | - | 预置 IPTV M3U / EPG |
-| `LIVE_ALLOW_PRIVATE` | 否 | 关闭 | 允许内网 IPTV 源 |
-| `60S_API_BASE` | 否 | 公共实例 | 影视热榜 API |
+| `HOMESPHERE_LIBRARY_MODE` | 否 | `strm` | `strm` / `direct115` |
+| `HOMESPHERE_STRM_PATH` | Docker | `./media` | 宿主机 STRM 目录 |
+| `HOMESPHERE_STRM_ROOT` | 否 | `/media` | 容器内 STRM 根目录 |
+| `HOMESPHERE_STRM_ALLOWED_HOSTS` | 推荐 | 空 | 允许的 Bridge 主机 |
+| `HOMESPHERE_DATA_DIR` | 否 | 本地 `.data` / Docker `/data` | SQLite |
+| `HOMESPHERE_SYNC_MAX_ENTRIES` | 否 | 30000 | 单次扫描条目上限 |
+| `HOMESPHERE_SYNC_MAX_DIRS` | 否 | 5000 | 单次扫描目录上限 |
+| `TMDB_API_TOKEN` | 海报整理需要 | - | TMDB Token |
+| `TMDB_LANGUAGE` | 否 | zh-CN | TMDB 语言 |
+| `DEFAULT_LIVE_SOURCES` | 否 | - | IPTV M3U / EPG |
+| `LIVE_ALLOW_PRIVATE` | 否 | 关闭 | 允许内网 IPTV |
 
----
-
-## 安全边界
-
-HomeSphere 按私人家庭服务设计：
-
-- 未登录用户不能访问片库 API
-- `/api/play/:id` 必须有有效 Session
-- Cookie 使用 HttpOnly + SameSite=Lax
-- HTTPS 环境使用 Secure Cookie
-- 登录有基础速率限制
-- `robots.txt` 禁止搜索引擎抓取
-- IPTV / 图片代理保留 SSRF 防护
-- 115 Cookie 只存在服务器环境变量
-- 数据库不保存家庭登录密码，也不保存115 Cookie
-
-建议始终通过 HTTPS 访问生产实例。
+115 Direct 的变量只在高级兼容模式使用，详见 `.env.example`。
 
 ---
 
@@ -353,34 +362,22 @@ HomeSphere 按私人家庭服务设计：
 ```text
 src/
 ├── app/
-│   ├── library/           # 私人片库 WebUI
-│   ├── live/              # IPTV
-│   └── api/
-│       ├── library/       # 本地片库 / 同步
-│       ├── play/          # 115 302播放
-│       └── live/          # IPTV API
-├── lib/
-│   ├── cloud/
-│   │   ├── provider.ts    # Provider 接口
-│   │   └── providers/
-│   │       └── 115.ts
 │   ├── library/
-│   │   ├── db.ts          # SQLite
-│   │   ├── media-name.ts  # 文件名解析
-│   │   └── sync.ts        # 手动索引
-│   └── tmdb/
-│       ├── client.ts      # TMDB API
-│       ├── matcher.ts     # 匹配置信度
-│       └── scraper.ts     # 自动/人工整理
+│   ├── live/
+│   └── api/
+│       ├── library/
+│       ├── play/
+│       └── live/
+├── lib/
+│   ├── library/
+│   │   ├── mode.ts       # STRM / Direct115 模式
+│   │   ├── strm.ts       # STRM 扫描与URL校验
+│   │   ├── db.ts
+│   │   ├── sync.ts
+│   │   └── media-name.ts
+│   ├── tmdb/
+│   └── cloud/            # 仅高级兼容 Provider
 └── components/
-```
-
-Provider 从第一天就按多云抽象：
-
-```text
-CloudProvider
-├── 115     ← 当前启用
-└── Quark   ← 接口预留，尚未启用
 ```
 
 ---
@@ -393,22 +390,15 @@ npm run typecheck
 npm run build
 ```
 
-GitHub Actions 会在 PR / main 上执行同样的核心检查。
-
 ---
 
 ## License / Upstream
 
-HomeSphere 基于 LibreTV 修改，项目继续遵循 **AGPL-3.0-or-later**。
-
-上游：
+HomeSphere 基于 LibreTV 修改，继续遵循 **AGPL-3.0-or-later**。
 
 - LibreTV: https://github.com/LibreSpark/LibreTV
 - OpenStrm: https://github.com/indown/openStrm
 
-115 Provider 的设计参考 OpenStrm；115 下载链接加解密实现由 OpenStrm MIT 代码适配而来。详见：
+Direct 115 兼容 Provider 的部分设计与加解密实现参考/适配自 OpenStrm MIT 代码；详见 `THIRD_PARTY_NOTICES.md`。
 
-- `LICENSE`
-- `THIRD_PARTY_NOTICES.md`
-
-HomeSphere 不包含、托管或提供任何影视内容，媒体文件来自部署者自行配置的私人存储。
+HomeSphere 不包含、托管或提供任何影视内容。

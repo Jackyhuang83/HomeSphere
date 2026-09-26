@@ -1,4 +1,4 @@
-export type CloudProviderKind = '115' | 'quark';
+export type CloudProviderKind = 'strm' | '115' | 'quark';
 
 export interface CloudEntry {
   id: string;
@@ -25,7 +25,7 @@ export interface DownloadLinkOptions {
 }
 
 export interface CloudProvider {
-  readonly kind: CloudProviderKind;
+  readonly kind: Exclude<CloudProviderKind, 'strm'>;
   readonly rootId: string;
   readonly readOnly: boolean;
   isConfigured(): boolean;

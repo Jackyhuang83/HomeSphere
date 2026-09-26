@@ -1,4 +1,5 @@
 import { getWork, listWorksForScrape, setWorkMatch, setWorkScrapeState } from '@/lib/library/db';
+import { activeLibraryProvider } from '@/lib/library/mode';
 import { getTmdbDetails, tmdbConfigured } from './client';
 import { matchWork } from './matcher';
 
@@ -11,7 +12,7 @@ export interface ScrapeSummary {
 
 export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<ScrapeSummary> {
   if(!tmdbConfigured()) throw new Error('未配置 TMDB_API_TOKEN');
-  const works=listWorksForScrape(limit);
+  const works=listWorksForScrape(limit,activeLibraryProvider());
   const summary:ScrapeSummary={requested:works.length,matched:0,review:0,failed:0};
 
   for(const work of works) {
@@ -28,7 +29,7 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
         summary.review++;
         continue;
       }
-      const confidence: 'high'|'medium' = result.confidence === 'high' ? 'high' : 'medium';
+      const confidence:'high'|'medium'=result.confidence==='high'?'high':'medium';
       const details=await getTmdbDetails(result.candidate.mediaType,result.candidate.id,signal) || result.candidate;
       setWorkMatch(work.id,{
         title:details.title || work.title,

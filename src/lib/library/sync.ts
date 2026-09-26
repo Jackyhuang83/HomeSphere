@@ -3,9 +3,15 @@ import type { CloudEntry, CloudProviderKind } from '@/lib/cloud/provider';
 import { getCloudProvider } from '@/lib/cloud/registry';
 import { buildGroupKey, isVideoFile, parseMediaName } from './media-name';
 import { makeMediaId, makeWorkId, upsertMedia, upsertWork } from './db';
+import { libraryMode } from './mode';
+import { syncStrmLibrary } from './strm';
 
-export interface SyncSummary {
-  provider:CloudProviderKind;
+export type SyncSummary =
+  | Awaited<ReturnType<typeof syncStrmLibrary>>
+  | Direct115SyncSummary;
+
+interface Direct115SyncSummary {
+  provider:'115';
   roots:string[];
   directoriesScanned:number;
   entriesSeen:number;
@@ -16,10 +22,16 @@ export interface SyncSummary {
   finishedAt:number;
 }
 
-export async function syncConfiguredLibrary(providerKind:CloudProviderKind='115',signal?:AbortSignal):Promise<SyncSummary> {
-  const provider=getCloudProvider(providerKind);
-  if(!provider.isConfigured()) throw new Error(`${providerKind} Provider 尚未配置`);
-  const roots=configuredMediaRoots(providerKind);
+export async function syncConfiguredLibrary(signal?: AbortSignal): Promise<SyncSummary> {
+  return libraryMode() === 'strm'
+    ? syncStrmLibrary(signal)
+    : syncDirect115Library(signal);
+}
+
+async function syncDirect115Library(signal?:AbortSignal):Promise<Direct115SyncSummary> {
+  const provider=getCloudProvider('115');
+  if(!provider.isConfigured()) throw new Error('115 Direct Provider 尚未配置');
+  const roots=configuredMediaRoots('115');
   if(!roots.length) throw new Error('未配置 HOMESPHERE_115_MEDIA_DIRS');
 
   const maxEntries=intEnv('HOMESPHERE_SYNC_MAX_ENTRIES',30000,100,300000);
@@ -47,7 +59,7 @@ export async function syncConfiguredLibrary(providerKind:CloudProviderKind='115'
           continue;
         }
         if(!isVideoFile(entry.name)) { skipped++; continue; }
-        const workId=indexVideo(providerKind,remotePath,entry);
+        const workId=indexDirect115Video(remotePath,entry);
         works.add(workId);
         videoFilesIndexed++;
       }
@@ -55,23 +67,23 @@ export async function syncConfiguredLibrary(providerKind:CloudProviderKind='115'
   }
 
   return {
-    provider:providerKind, roots, directoriesScanned, entriesSeen, videoFilesIndexed,
+    provider:'115', roots, directoriesScanned, entriesSeen, videoFilesIndexed,
     worksIndexed:works.size, skipped, startedAt, finishedAt:Date.now(),
   };
 }
 
-function indexVideo(provider:CloudProviderKind,remotePath:string,entry:CloudEntry):string {
+function indexDirect115Video(remotePath:string,entry:CloudEntry):string {
   const parsed=parseMediaName(entry.name);
   const groupKey=buildGroupKey(parsed.mediaType,parsed.title,parsed.year);
-  const workId=makeWorkId(provider,groupKey);
+  const workId=makeWorkId('115',groupKey);
   const now=Date.now();
 
   upsertWork({
-    id:workId, provider, groupKey, title:parsed.title, year:parsed.year,
+    id:workId, provider:'115', groupKey, title:parsed.title, year:parsed.year,
     mediaType:parsed.mediaType, scrapeStatus:'pending', manualMatch:false, updatedAt:now,
   });
   upsertMedia({
-    id:makeMediaId(provider,remotePath), workId, provider, remoteId:entry.id, token:entry.token,
+    id:makeMediaId('115',remotePath), workId, provider:'115', remoteId:entry.id, token:entry.token,
     path:remotePath, filename:entry.name, title:parsed.title, year:parsed.year, mediaType:parsed.mediaType,
     season:parsed.season, episode:parsed.episode, size:entry.size, hash:entry.hash, updatedAt:now,
   });
@@ -79,6 +91,7 @@ function indexVideo(provider:CloudProviderKind,remotePath:string,entry:CloudEntr
 }
 
 export function configuredMediaRoots(provider:CloudProviderKind):string[] {
+  if (provider !== '115' && provider !== 'quark') return [];
   const key=provider==='115'?'HOMESPHERE_115_MEDIA_DIRS':'HOMESPHERE_QUARK_MEDIA_DIRS';
   const raw=process.env[key]?.trim();
   if(!raw) return [];
@@ -95,11 +108,13 @@ export function configuredMediaRoots(provider:CloudProviderKind):string[] {
   if(roots.includes('/')) throw new Error(`${key} 不允许配置根目录 /；请指定影视目录，避免全盘扫描`);
   return roots;
 }
+
 function normalizeRemotePath(value:string):string {
   const clean=value.trim().replace(/\\/g,'/').replace(/\/{2,}/g,'/').replace(/\/$/,'');
   if(!clean) return '';
   return clean.startsWith('/')?clean:`/${clean}`;
 }
+
 function intEnv(name:string,fallback:number,min:number,max:number):number {
   const n=Number.parseInt(process.env[name] || '',10);
   return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;

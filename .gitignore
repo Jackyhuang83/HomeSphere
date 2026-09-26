@@ -4,6 +4,7 @@ out/
 .env
 .env*.local
 .data/
+media/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm

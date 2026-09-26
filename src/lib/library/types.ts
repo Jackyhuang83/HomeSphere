@@ -9,6 +9,7 @@ export interface MediaItem {
   provider: CloudProviderKind;
   remoteId: string;
   token?: string;
+  sourceUrl?: string;
   path: string;
   filename: string;
   title: string;

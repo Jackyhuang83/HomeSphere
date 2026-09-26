@@ -37,6 +37,7 @@ export default function WorkPage() {
   if(!work) return <Centered text="正在读取作品…"/>;
 
   const poster=work.posterUrl?`/api/image/${encodeURIComponent(work.posterUrl)}`:undefined;
+  const source=work.provider==='strm'?'STRM / Bridge':work.provider==='115'?'115 Direct':'Quark';
 
   return <div className="min-h-screen flex flex-col">
     <Header />
@@ -53,7 +54,11 @@ export default function WorkPage() {
               ? <video key={selected.id} src={`/api/play/${encodeURIComponent(selected.id)}`} controls playsInline preload="metadata" className="w-full h-full bg-black" />
               : <span className="text-white/50 text-sm">没有可播放文件</span>}
           </div>
-          <p className="mt-2 text-xs text-faint">当前为浏览器原生播放；MKV、特殊编码和字幕会在后续播放器阶段完善。</p>
+          <p className="mt-2 text-xs text-faint">
+            {work.provider==='strm'
+              ? '播放链路：HomeSphere 鉴权 → STRM 解析地址 → Media Bridge → 115 CDN。HomeSphere 不持有115凭据。'
+              : '当前为 Direct 115 高级兼容模式。'}
+          </p>
         </div>
 
         <aside className="card p-4">
@@ -61,12 +66,12 @@ export default function WorkPage() {
             {poster && <img src={poster} alt={work.title} className="w-24 aspect-[2/3] object-cover rounded-lg shrink-0" />}
             <div className="min-w-0">
               <h1 className="text-xl font-semibold text-content">{work.title}</h1>
-              <p className="text-sm text-muted mt-1">{[work.year,work.mediaType==='movie'?'电影':'剧集',work.tmdbId?`TMDB ${work.tmdbId}`:'未匹配TMDB'].filter(Boolean).join(' · ')}</p>
+              <p className="text-sm text-muted mt-1">{[work.year,work.mediaType==='movie'?'电影':'剧集',source,work.tmdbId?`TMDB ${work.tmdbId}`:'未匹配TMDB'].filter(Boolean).join(' · ')}</p>
             </div>
           </div>
           {work.overview && <p className="text-sm text-muted leading-relaxed mt-4">{work.overview}</p>}
           {selected && <div className="mt-4">
-            <div className="text-xs text-faint mb-1">当前文件</div>
+            <div className="text-xs text-faint mb-1">当前条目</div>
             <div className="text-sm text-content break-all">{selected.filename}</div>
           </div>}
         </aside>
