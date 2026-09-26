@@ -13,7 +13,7 @@ export default function HomePage() {
         <section className="mb-7">
           <h1 className="text-3xl sm:text-4xl font-bold text-content">影视发现</h1>
           <p className="text-sm text-muted mt-2">
-            看榜单发现新片；已有内容可进入 <Link href="/library" className="text-accent hover:underline">我的115片库</Link>。
+            看榜单发现新片；HomeSphere 会自动标出“已入库 / 未入库”，已入库可直接打开 <Link href="/library" className="text-accent hover:underline">我的片库</Link>。
           </p>
         </section>
         <RecommendSection />

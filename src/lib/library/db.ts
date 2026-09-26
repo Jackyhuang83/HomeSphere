@@ -4,6 +4,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { CloudProviderKind } from '@/lib/cloud/provider';
 import type { LibraryWork, LibraryWorkDetail, MediaItem, ScrapeStatus, WorkListResult } from './types';
+import { matchLocalCandidates, type LocalMatchCandidate } from './local-match';
+import type { LibraryMatchHit, LibraryMatchRequestItem } from '@/lib/types';
 
 let db: DatabaseSync | null = null;
 
@@ -152,6 +154,26 @@ LIMIT ?
   return (rows as unknown as DbWorkRow[]).map(mapWork);
 }
 
+export function matchLibraryWorks(
+  inputs:LibraryMatchRequestItem[],
+  provider:CloudProviderKind
+):Record<string,LibraryMatchHit> {
+  const rows=database().prepare(`
+SELECT id,title,original_title,year,media_type
+FROM works
+WHERE provider=?
+`).all(provider) as unknown as DbMatchRow[];
+
+  const candidates:LocalMatchCandidate[]=rows.map(row=>({
+    id:row.id,
+    title:row.title,
+    originalTitle:row.original_title ?? undefined,
+    year:row.year ?? undefined,
+    mediaType:row.media_type as 'movie'|'tv',
+  }));
+  return matchLocalCandidates(inputs,candidates);
+}
+
 export function getWork(id:string): LibraryWorkDetail | null {
   const row=database().prepare(`
 SELECT w.*, COUNT(m.id) file_count
@@ -211,6 +233,14 @@ scrape_status=?,scrape_error=?,match_confidence=?,manual_match=?,updated_at=? WH
 export function setWorkScrapeState(id:string,status:ScrapeStatus,error?:string):void {
   database().prepare('UPDATE works SET scrape_status=?,scrape_error=?,updated_at=? WHERE id=?')
     .run(status,error??null,Date.now(),id);
+}
+
+interface DbMatchRow {
+  id:string;
+  title:string;
+  original_title:string|null;
+  year:string|null;
+  media_type:string;
 }
 
 interface DbWorkRow {

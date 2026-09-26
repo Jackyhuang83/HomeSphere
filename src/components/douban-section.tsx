@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
-import type { DoubanItem } from '@/lib/types';
+import type { DoubanItem, LibraryMatchHit, LibraryMatchRequestItem } from '@/lib/types';
 import { RecommendCard } from './recommend-card';
 
 const MOVIE_TAGS = ['热门','最新','经典','豆瓣高分','冷门佳片','华语','欧美','韩国','日本','动画'];
@@ -78,9 +78,39 @@ function HotListView() {
 }
 
 function RecommendationGrid({ items, loading, error }: { items: DoubanItem[]; loading: boolean; error: boolean }) {
+  const matchItems:LibraryMatchRequestItem[]=items.slice(0,60).map((item,index)=>({
+    key:recommendMatchKey(item,index),
+    title:item.title,
+    year:item.year,
+    isTv:item.isTv,
+  }));
+  const fingerprint=matchItems.map(item=>`${item.key}:${item.title}:${item.year || ''}:${item.isTv===true?'tv':item.isTv===false?'movie':'any'}`).join('|');
+  const matchQuery=useQuery({
+    queryKey:['library-match',fingerprint],
+    queryFn:({signal})=>api.libraryMatch(matchItems,signal),
+    enabled:!loading && !error && matchItems.length>0,
+    staleTime:30_000,
+  });
+
   if (error) return <p className="text-center text-sm text-faint py-10">推荐内容加载失败</p>;
   if (loading) return <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">{Array.from({ length: 16 }).map((_, i) => <div key={i} className="aspect-[2/3] rounded-lg bg-chip animate-pulse" />)}</div>;
-  return <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">{items.map((item) => <RecommendCard key={item.id} item={item} />)}</div>;
+
+  const matches:Record<string,LibraryMatchHit>=matchQuery.data?.matches || {};
+  return <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+    {items.map((item,index)=>{
+      const key=recommendMatchKey(item,index);
+      return <RecommendCard
+        key={key}
+        item={item}
+        match={matches[key]}
+        matchKnown={matchQuery.isSuccess}
+      />;
+    })}
+  </div>;
+}
+
+function recommendMatchKey(item:DoubanItem,index:number):string {
+  return `${index}:${item.id}:${item.isTv===true?'tv':item.isTv===false?'movie':'any'}`;
 }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

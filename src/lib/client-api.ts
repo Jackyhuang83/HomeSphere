@@ -6,6 +6,8 @@ import type {
   DoubanResponse,
   LiveEpgResponse,
   LivePlaylistResponse,
+  LibraryMatchRequestItem,
+  LibraryMatchResponse,
 } from './types';
 
 export class ApiError extends Error {
@@ -114,6 +116,14 @@ export const api = {
     const sp = new URLSearchParams({ id });
     return request<DoubanResponse>(`/api/hot-list?${sp}`, { signal });
   },
+
+  libraryMatch: (items: LibraryMatchRequestItem[], signal?: AbortSignal) =>
+    request<LibraryMatchResponse>('/api/library/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+      signal,
+    }),
 
   livePlaylist: (url: string, force = false, signal?: AbortSignal) => {
     const sp = new URLSearchParams({ url });

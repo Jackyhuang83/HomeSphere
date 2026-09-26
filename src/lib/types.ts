@@ -4,6 +4,7 @@ export interface DoubanItem {
   cover: string;
   rating?: string;
   isTv?: boolean;
+  year?: string;
 }
 
 export interface DoubanResponse {
@@ -17,6 +18,25 @@ export interface BangumiCalendarDay {
 
 export interface BangumiCalendarResponse {
   days: BangumiCalendarDay[];
+}
+
+export interface LibraryMatchRequestItem {
+  key: string;
+  title: string;
+  year?: string;
+  isTv?: boolean;
+}
+
+export interface LibraryMatchHit {
+  workId: string;
+  title: string;
+  year?: string;
+  mediaType: 'movie'|'tv';
+  quality: 'title'|'title-year';
+}
+
+export interface LibraryMatchResponse {
+  matches: Record<string,LibraryMatchHit>;
 }
 
 export interface AuthStatusResponse {
