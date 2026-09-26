@@ -24,6 +24,7 @@ export function Header() {
           </Link>
           <nav className="flex items-center gap-1 ml-auto">
             <HeaderLink href="/" active={pathname === '/'}>发现</HeaderLink>
+            <HeaderLink href="/library" active={pathname.startsWith('/library')}>片库</HeaderLink>
             <HeaderLink href="/live" active={pathname === '/live'}>直播</HeaderLink>
             <ThemeToggle />
             <button className="p-2 rounded-md text-muted hover:text-content hover:bg-hover" onClick={() => setSettingsOpen(true)} aria-label="设置">
