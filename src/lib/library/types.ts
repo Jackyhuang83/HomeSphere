@@ -1,6 +1,7 @@
 import type { CloudProviderKind } from '@/lib/cloud/provider';
 
 export type MediaType = 'movie' | 'tv';
+export type ScrapeStatus = 'pending' | 'matched' | 'review' | 'failed' | 'manual';
 
 export interface MediaItem {
   id: string;
@@ -25,11 +26,17 @@ export interface LibraryWork {
   provider: CloudProviderKind;
   groupKey: string;
   title: string;
+  originalTitle?: string;
   year?: string;
   mediaType: MediaType;
+  tmdbId?: number;
   posterUrl?: string;
   backdropUrl?: string;
   overview?: string;
+  scrapeStatus: ScrapeStatus;
+  scrapeError?: string;
+  matchConfidence?: 'high'|'medium'|'low';
+  manualMatch: boolean;
   fileCount: number;
   updatedAt: number;
 }

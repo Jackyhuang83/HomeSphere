@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardRequest } from '@/lib/api-guard';
 import { configuredProviderKinds } from '@/lib/cloud/registry';
 import { listWorks } from '@/lib/library/db';
+import { tmdbConfigured } from '@/lib/tmdb/client';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -20,5 +21,6 @@ export async function GET(req:Request) {
     ...result,
     configuredProviders:configuredProviderKinds(),
     mediaRootsConfigured:Boolean(process.env.HOMESPHERE_115_MEDIA_DIRS?.trim()),
+    tmdbConfigured:tmdbConfigured(),
   },{headers:{'Cache-Control':'private, no-store'}});
 }

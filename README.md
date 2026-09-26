@@ -31,12 +31,13 @@ HomeSphere 是一个面向**本人 / 家人 / 少量朋友**使用的私人家�
 - 手动同步 115 片库
 - 登录后通过 `/api/play/:id` 获取 115 临时直链并 HTTP 302
 - Docker `/data` 持久化
+- TMDB 自动匹配、海报、背景图与简介
+- 低置信候选进入人工确认，不自动覆盖
+- 手动搜索 TMDB 并指定正确条目
 - GitHub Actions：test + typecheck + production build
 
 ### 下一阶段
 
-- TMDB 自动识别、海报、简介与年份校正
-- 人工纠错 / 指定 TMDB ID
 - 推荐榜单 → “搜我的115”
 - 更完整的点播播放器与字幕
 - 增量同步 / 删除检测
@@ -107,7 +108,36 @@ Silo.S01E03.2160p.mkv
 - 年份：`2024`
 - 常见 2160p / 1080p / WEB-DL / BluRay / REMUX / HEVC 等标签清理
 
-TMDB 阶段会进一步修正片名和元数据。
+TMDB 会进一步修正片名、年份、海报和简介。自动整理只接受高/中置信匹配；低置信候选会保留为“需要确认”，不会自动写入错误元数据。
+
+---
+
+## TMDB 配置
+
+HomeSphere 使用 TMDB v3 API，并使用 API Read Access Token 作为 Bearer Token。
+
+在服务器 `.env` 中配置：
+
+```env
+TMDB_API_TOKEN=你的_API_Read_Access_Token
+TMDB_LANGUAGE=zh-CN
+```
+
+使用流程：
+
+```text
+同步115
+  ↓
+生成本地作品索引
+  ↓
+点击「整理海报」
+  ↓
+TMDB 搜索
+  ├─ 高/中置信 → 自动入库
+  └─ 低置信/失败 → 人工「修正TMDB」
+```
+
+“整理海报”只处理尚未整理的作品；已经进入人工确认的低置信条目不会在每次整理时反复请求 TMDB。
 
 ---
 
@@ -292,6 +322,8 @@ HomeSphere 不作为电影字节的数据转发服务器，因此小型 VPS 也�
 | `HOMESPHERE_115_TIMEOUT_MS` | 否 | 15000 | 115 单请求超时 |
 | `HOMESPHERE_SYNC_MAX_ENTRIES` | 否 | 30000 | 单次同步条目保护阈值 |
 | `HOMESPHERE_SYNC_MAX_DIRS` | 否 | 5000 | 单次同步目录保护阈值 |
+| `TMDB_API_TOKEN` | 海报整理需要 | - | TMDB API Read Access Token |
+| `TMDB_LANGUAGE` | 否 | zh-CN | TMDB 返回语言 |
 | `DEFAULT_LIVE_SOURCES` | 否 | - | 预置 IPTV M3U / EPG |
 | `LIVE_ALLOW_PRIVATE` | 否 | 关闭 | 允许内网 IPTV 源 |
 | `60S_API_BASE` | 否 | 公共实例 | 影视热榜 API |
@@ -332,10 +364,14 @@ src/
 │   │   ├── provider.ts    # Provider 接口
 │   │   └── providers/
 │   │       └── 115.ts
-│   └── library/
-│       ├── db.ts          # SQLite
-│       ├── media-name.ts  # 文件名解析
-│       └── sync.ts        # 手动索引
+│   ├── library/
+│   │   ├── db.ts          # SQLite
+│   │   ├── media-name.ts  # 文件名解析
+│   │   └── sync.ts        # 手动索引
+│   └── tmdb/
+│       ├── client.ts      # TMDB API
+│       ├── matcher.ts     # 匹配置信度
+│       └── scraper.ts     # 自动/人工整理
 └── components/
 ```
 
