@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
  */
 
 export const SESSION_COOKIE = 'ltv_session';
-const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 天
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
 
 export function getPassword(): string {
   return process.env.PASSWORD || '';
@@ -22,7 +22,7 @@ export function isPasswordConfigured(): boolean {
 
 function getSecret(): string {
   if (process.env.PROXY_SECRET) return process.env.PROXY_SECRET;
-  return crypto.createHash('sha256').update(getPassword() + ':libretv::session-salt').digest('hex');
+  return crypto.createHash('sha256').update(getPassword() + ':homesphere::session-salt').digest('hex');
 }
 
 function hmac(payload: string): string {

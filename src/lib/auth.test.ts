@@ -28,8 +28,8 @@ describe('signSession / verifySession', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     const { token } = signSession();
-    // 快进 91 天（TTL 90 天）
-    vi.setSystemTime(new Date('2026-04-02T00:00:00Z'));
+    // 快进 31 天（TTL 30 天）
+    vi.setSystemTime(new Date('2026-02-01T00:00:00Z'));
     expect(verifySession(token)).toBe(false);
     vi.useRealTimers();
   });
@@ -37,8 +37,8 @@ describe('signSession / verifySession', () => {
   it('篡改 payload（替换过期时间但沿用旧签名）被拒绝', () => {
     const { token } = signSession();
     const sig = token.slice(token.lastIndexOf('.') + 1);
-    // 用与真实 TTL（90 天）不同的偏移构造新 payload，保证签名与 payload 不匹配
-    const forged = `${String(Date.now() + 95 * 24 * 3600 * 1000)}.${sig}`;
+    // 用与真实 TTL（30 天）不同的偏移构造新 payload，保证签名与 payload 不匹配
+    const forged = `${String(Date.now() + 35 * 24 * 3600 * 1000)}.${sig}`;
     expect(verifySession(forged)).toBe(false);
   });
 
