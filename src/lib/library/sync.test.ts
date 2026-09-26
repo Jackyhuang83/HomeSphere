@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildGroupKey } from './sync';
+import { buildGroupKey } from './media-name';
 
 describe('buildGroupKey', () => {
   it('同一剧集不同集号归到同一作品', () => {
