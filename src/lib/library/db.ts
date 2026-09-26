@@ -171,6 +171,16 @@ export function getMedia(id:string): MediaItem | null {
   return row ? mapMedia(row) : null;
 }
 
+export function getProbeMedia(provider:CloudProviderKind):MediaItem|null {
+  const row=database().prepare(`
+SELECT * FROM media
+WHERE provider=? AND source_url IS NOT NULL AND source_url<>''
+ORDER BY updated_at DESC
+LIMIT 1
+`).get(provider) as DbMediaRow | undefined;
+  return row ? mapMedia(row) : null;
+}
+
 export function listWorksForScrape(limit=50,provider?:CloudProviderKind):LibraryWork[] {
   const providerClause=provider?'AND w.provider=?':'';
   const args=provider?[provider,clamp(limit,1,200)]:[clamp(limit,1,200)];
