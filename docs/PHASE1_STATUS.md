@@ -60,3 +60,22 @@ This is the first development slice, not the finished MVP.
 ## Important credential note
 
 `ONEHUBX_115_COOKIE` is a sensitive credential. It must stay in the server environment only. Never commit it to Git, expose it to browser JavaScript, logs, screenshots, or client APIs.
+
+
+## Phase 1.1 — library works + TMDB enrichment
+
+Added after the initial foundation:
+
+- Work-level library model: one movie/show card can own multiple media files.
+- TV episodes no longer appear as separate poster-wall cards after re-sync.
+- TMDB search/details client with conservative throttling.
+- Auto matching adapted from OpenStrm's evidence/scoring approach:
+  - exact title + year = high confidence;
+  - exact title with missing/near year = medium;
+  - low-confidence candidates are not auto-applied.
+- Work poster/backdrop/overview enrichment.
+- Manual TMDB correction page for review/failed items.
+- Recommendation cards now expose “搜我的115”, which searches the local HomeSphere library only.
+- Work playback page lists seasons/episodes and still uses authenticated 115 HTTP 302 per selected file.
+
+TMDB requires `TMDB_API_TOKEN`. Low-confidence items stay in `review` and are not repeatedly queried by the bulk scraper.

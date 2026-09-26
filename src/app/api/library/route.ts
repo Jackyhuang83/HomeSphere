@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { guardRequest } from '@/lib/api-guard';
 import { configuredProviderKinds } from '@/lib/cloud/registry';
-import { listMedia } from '@/lib/library/db';
+import { listWorks } from '@/lib/library/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const type = url.searchParams.get('type');
   const limit = Number(url.searchParams.get('limit') ?? 60);
   const offset = Number(url.searchParams.get('offset') ?? 0);
-  const result = listMedia({
+  const result = listWorks({
     limit,
     offset,
     type: type === 'movie' || type === 'tv' ? type : undefined,
@@ -23,5 +23,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ...result,
     configuredProviders: configuredProviderKinds(),
+    tmdbConfigured: Boolean(process.env.TMDB_API_TOKEN?.trim()),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

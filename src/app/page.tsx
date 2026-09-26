@@ -370,6 +370,9 @@ function HomeContent() {
               setInput(title);
               runSearch(title);
             }}
+            onLibrarySearch={(title) => {
+              router.push(`/library?q=${encodeURIComponent(title)}`);
+            }}
           />
         )}
       </main>
