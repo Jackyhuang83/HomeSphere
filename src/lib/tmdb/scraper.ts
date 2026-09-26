@@ -43,7 +43,7 @@ export async function scrapePendingWorks(limit = 50, signal?: AbortSignal): Prom
         backdropUrl: candidate.backdropUrl,
         overview: candidate.overview,
         scrapeStatus: 'matched',
-        matchConfidence: result.confidence,
+        matchConfidence: result.confidence === 'none' ? undefined : result.confidence,
         scrapeError: undefined,
         manualMatch: false,
       });
