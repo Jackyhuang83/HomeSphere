@@ -1,8 +1,8 @@
 import { guardRequest, jsonError } from '@/lib/api-guard';
 import { getCloudProvider } from '@/lib/cloud/registry';
 import { getMedia } from '@/lib/library/db';
+import { resolveStrmPlaybackTarget } from '@/lib/library/bridge';
 import { activeLibraryProvider } from '@/lib/library/mode';
-import { validateStrmPlaybackUrl } from '@/lib/library/strm';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -19,7 +19,10 @@ export async function GET(req:Request,ctx:{params:Promise<{id:string}>}) {
 
     if(media.provider==='strm') {
       if(!media.sourceUrl) return jsonError('STRM 条目没有播放地址',502);
-      target=validateStrmPlaybackUrl(media.sourceUrl);
+      target=await resolveStrmPlaybackTarget(media.sourceUrl,{
+        signal:req.signal,
+        userAgent:req.headers.get('user-agent') || undefined,
+      });
     } else {
       const provider=getCloudProvider(media.provider);
       const link=await provider.downloadLink(
