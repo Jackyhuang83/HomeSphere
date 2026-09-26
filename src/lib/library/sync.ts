@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { CloudEntry, CloudProviderKind } from '@/lib/cloud/provider';
 import { getCloudProvider } from '@/lib/cloud/registry';
 import { mediaId, upsertMedia, upsertWork, workId } from './db';
-import { isVideoFile, parseMediaName } from './media-name';
+import { buildGroupKey, isVideoFile, parseMediaName } from './media-name';
 
 export interface SyncSummary {
   provider: CloudProviderKind;
@@ -82,11 +82,6 @@ function indexVideo(provider: CloudProviderKind, remotePath: string, entry: Clou
     size: entry.size, updatedAt: now,
   });
   return wid;
-}
-
-export function buildGroupKey(mediaType: 'movie' | 'tv', title: string, year?: string): string {
-  const normalized = title.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  return `${mediaType}:${normalized}:${year ?? ''}`;
 }
 
 export function configuredMediaRoots(provider: CloudProviderKind): string[] {
