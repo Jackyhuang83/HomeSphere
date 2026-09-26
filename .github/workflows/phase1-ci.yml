@@ -1,0 +1,38 @@
+name: Phase 1 CI
+
+on:
+  push:
+    branches:
+      - dev/phase1-foundation
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: Type check
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+        env:
+          PASSWORD: phase1-ci-password
+          PROXY_SECRET: phase1-ci-secret
+          ONEHUBX_DATA_DIR: ${{ runner.temp }}/onehubx-data
