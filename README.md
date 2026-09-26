@@ -49,7 +49,8 @@ HomeSphere 是一个面向**本人 / 家人 / 少量朋友**的私人家庭影�
 播放时 HomeSphere 在服务器内部调用 Bridge，只取它返回的最终 CDN `Location`，然后把该 CDN URL 302 给客户端。Bridge 的管理/解析端口无需暴露互联网。
 
 详细接口：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)  
-Bridge 选择记录：[`docs/BRIDGE_OPTIONS.md`](docs/BRIDGE_OPTIONS.md)
+Bridge 选择记录：[`docs/BRIDGE_OPTIONS.md`](docs/BRIDGE_OPTIONS.md)  
+Bridge 验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)
 
 ---
 
@@ -107,6 +108,9 @@ iPhone ───────────────────► 115 CDN
 - **内网 Media Bridge 服务端解析**
 - 最终 CDN 302，不代理视频字节
 - Bridge 主机 allowlist
+- Bridge 静态安全状态卡
+- 手动真实播放链路探测（30秒限频，不回显临时URL）
+- STRM 模式残留115 Cookie 安全告警
 - 最终公网 URL SSRF 校验
 - Docker `/data` 持久化 + `/media:ro`
 - 115 Direct 仅高级兼容模式
@@ -225,6 +229,33 @@ HOMESPHERE_STRM_PLAYBACK_MODE=direct
 ```
 
 此时 HomeSphere 只做登录鉴权后跳转。
+
+---
+
+## Bridge 自检
+
+片库页会显示 **Media Bridge** 状态卡。
+
+静态检查不会访问115或Bridge，检查：
+
+- STRM目录是否可读；
+- 当前是否为resolve模式；
+- Bridge allowlist是否配置；
+- HomeSphere环境中是否错误残留115 Cookie；
+- 是否已经有可用于探测的STRM。
+
+同步至少一个STRM后，可以手动点击“测试播放链路”。
+
+该操作：
+
+- 只测试一条STRM；
+- 全局至少间隔30秒；
+- 会真实调用一次内网Bridge解析；
+- 只显示Bridge主机、最终CDN主机和耗时；
+- 不向浏览器返回完整115临时URL；
+- 不读取视频字节。
+
+完整验收步骤见 `docs/BRIDGE_VALIDATION.md`。
 
 ---
 
