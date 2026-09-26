@@ -41,23 +41,20 @@ type PrimaryTab = 'sources' | 'prefs' | 'data';
 type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'io';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
-  { id: 'sources', label: '源管理', icon: 'link' },
+  { id: 'sources', label: '直播', icon: 'link' },
   { id: 'prefs', label: '偏好设置', icon: 'gear' },
-  { id: 'data', label: '数据', icon: 'download' },
 ];
 
 const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> = {
-  sources: [
-    { id: 'vod', label: '点播源' },
-    { id: 'live', label: '直播源' },
-    { id: 'subs', label: '数据源订阅' },
-  ],
+  // HomeSphere 的点播只来自私人网盘；公网 Apple CMS 点播源不再暴露到产品 UI。
+  sources: [{ id: 'live', label: '直播源' }],
   prefs: [
-    { id: 'playback', label: '播放与过滤' },
-    { id: 'image', label: '封面图加载' },
-    { id: 'home', label: '首页与内容' },
+    { id: 'playback', label: '播放' },
+    { id: 'image', label: '封面图' },
+    { id: 'home', label: '首页推荐' },
   ],
-  data: [{ id: 'io', label: '配置导入导出' }],
+  // 保留旧类型仅用于兼容历史 localStorage，正常 UI 不提供入口。
+  data: [{ id: 'io', label: '旧配置' }],
 };
 
 const TAB_STORAGE_KEY = 'libretv-settings-tab';
@@ -65,7 +62,7 @@ const TAB_STORAGE_KEY = 'libretv-settings-tab';
 export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [primary, setPrimary] = useState<PrimaryTab>('sources');
   const [secondary, setSecondary] = useState<Record<PrimaryTab, SecondaryTab>>({
-    sources: 'vod',
+    sources: 'live',
     prefs: 'playback',
     data: 'io',
   });
@@ -79,14 +76,13 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
         primary?: PrimaryTab;
         secondary?: Partial<Record<PrimaryTab, SecondaryTab>>;
       };
-      // 旧版把「数据源订阅」放在「数据」下，现已迁至「源管理」：自动重定向到新位置
-      const migratedSubs = saved.secondary?.data === 'subs';
-      const targetPrimary = migratedSubs && saved.primary === 'data' ? 'sources' : saved.primary;
-      if (targetPrimary && SECONDARY_TABS[targetPrimary]) setPrimary(targetPrimary);
+      const visiblePrimary = saved.primary && PRIMARY_TABS.some((tab) => tab.id === saved.primary)
+        ? saved.primary
+        : 'sources';
+      setPrimary(visiblePrimary);
       setSecondary((prev) => {
-        const next = { ...prev };
-        if (migratedSubs) next.sources = 'subs';
-        for (const key of Object.keys(SECONDARY_TABS) as PrimaryTab[]) {
+        const next = { ...prev, sources: 'live' as SecondaryTab };
+        for (const key of ['prefs'] as const) {
           const v = saved.secondary?.[key];
           if (v && SECONDARY_TABS[key].some((t) => t.id === v)) next[key] = v;
         }
