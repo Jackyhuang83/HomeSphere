@@ -122,7 +122,7 @@ GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ? OFFSET ?
   const countRow = type
     ? database().prepare('SELECT COUNT(*) n FROM works WHERE media_type=?').get(type) as { n:number }
     : database().prepare('SELECT COUNT(*) n FROM works').get() as { n:number };
-  return { items:(rows as DbWorkRow[]).map(mapWork), total:Number(countRow.n) };
+  return { items:(rows as unknown as DbWorkRow[]).map(mapWork), total:Number(countRow.n) };
 }
 
 export function searchWorks(query: string, limit=60): LibraryWork[] {
@@ -137,7 +137,7 @@ GROUP BY w.id
 ORDER BY CASE WHEN w.title=? THEN 0 ELSE 1 END, w.updated_at DESC
 LIMIT ?
 `).all(pattern,q,clamp(limit,1,100));
-  return (rows as DbWorkRow[]).map(mapWork);
+  return (rows as unknown as DbWorkRow[]).map(mapWork);
 }
 
 export function getWork(id:string): LibraryWorkDetail | null {
@@ -150,7 +150,7 @@ WHERE w.id=? GROUP BY w.id
   const files=database().prepare(`
 SELECT * FROM media WHERE work_id=?
 ORDER BY COALESCE(season,0), COALESCE(episode,0), filename
-`).all(id) as DbMediaRow[];
+`).all(id) as unknown as DbMediaRow[];
   return { ...mapWork(row), files:files.map(mapMedia) };
 }
 
