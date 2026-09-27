@@ -65,14 +65,30 @@ chmod 700 bridge-config
 
 if [ ! -f .env ]; then
   say "设置家庭登录密码"
+  RANDOM_PASSWORD="$(openssl rand -hex 10)"
+  echo "系统已自动生成 20 位随机密码："
+  echo
+  echo "    $RANDOM_PASSWORD"
+  echo
+  echo "直接回车即可使用这个随机密码；如果想用自己的密码，也可以现在输入。"
+
   while true; do
-    read -r -s -p "请输入 HomeSphere 家庭访问密码（至少 8 位，只用字母/数字/@._%+=:!,-）： " PASSWORD
+    read -r -s -p "自定义密码（至少 8 位；不修改就直接回车）： " CUSTOM_PASSWORD
     echo
-    read -r -s -p "请再输入一次： " PASSWORD2
+
+    if [ -z "$CUSTOM_PASSWORD" ]; then
+      PASSWORD="$RANDOM_PASSWORD"
+      break
+    fi
+
+    [ "${#CUSTOM_PASSWORD}" -ge 8 ] || { echo "密码至少 8 位，请重新输入。"; continue; }
+    [[ "$CUSTOM_PASSWORD" =~ ^[A-Za-z0-9@._%+=:!,-]+$ ]] || { echo "密码只支持字母、数字和 @ . _ % + = : ! , -"; continue; }
+
+    read -r -s -p "请再输入一次自定义密码： " PASSWORD2
     echo
-    [ "$PASSWORD" = "$PASSWORD2" ] || { echo "两次密码不一致，请重新输入。"; continue; }
-    [ "${#PASSWORD}" -ge 8 ] || { echo "密码至少 8 位。"; continue; }
-    [[ "$PASSWORD" =~ ^[A-Za-z0-9@._%+=:!,-]+$ ]] || { echo "密码包含不支持的字符，请按提示重新设置。"; continue; }
+    [ "$CUSTOM_PASSWORD" = "$PASSWORD2" ] || { echo "两次密码不一致，请重新输入。"; continue; }
+
+    PASSWORD="$CUSTOM_PASSWORD"
     break
   done
 
@@ -147,4 +163,21 @@ cat <<'EOF'
 
 Media Bridge 默认账号通常为 admin / admin123。
 首次登录后请立即修改管理密码，再完成 115 开放平台授权。
+
+HomeSphere 家庭密码忘记后，不需要找配置文件。
+SSH 登录 VPS 后运行：
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
+
+即可查看当前密码、生成新的随机密码或设置自己的密码。
 EOF
+
+if [ -f .env ]; then
+  CURRENT_PASSWORD="$(sed -n "s/^PASSWORD=['\"]\{0,1\}\(.*\)['\"]\{0,1\}$/\1/p" .env | head -n1)"
+  if [ -n "$CURRENT_PASSWORD" ]; then
+    echo
+    echo "HomeSphere 当前家庭访问密码："
+    echo
+    echo "    $CURRENT_PASSWORD"
+    echo
+  fi
+fi
