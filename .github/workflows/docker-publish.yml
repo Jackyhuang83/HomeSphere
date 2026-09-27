@@ -8,6 +8,7 @@ on:
       - 'v*'
     paths:
       - 'Dockerfile'
+      - '.dockerignore'
       - 'package.json'
       - 'package-lock.json'
       - 'next.config.*'
