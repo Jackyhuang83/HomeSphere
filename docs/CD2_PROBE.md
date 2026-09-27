@@ -31,7 +31,7 @@ CloudDrive2 官方 gRPC 的 `GetDownloadUrlPath` 可以返回：
 ## HomeSphere 配置
 
 ```env
-HOMESPHERE_CD2_ENDPOINT=http://clouddrive:19798
+HOMESPHERE_CD2_ENDPOINT=http://host.docker.internal:19798
 HOMESPHERE_CD2_TOKEN=你的限目录只读Token
 HOMESPHERE_CD2_PROBE_PATH=/115open/Movies/一个真实测试文件.mp4
 HOMESPHERE_CD2_TIMEOUT_MS=8000
@@ -39,7 +39,7 @@ HOMESPHERE_CD2_TIMEOUT_MS=8000
 
 Token 只放服务器 `.env`，不要提交 GitHub，也不要贴到 Issue 或聊天中。
 
-推荐把 CloudDrive2 与 HomeSphere 放在同一 Docker 网络，endpoint 使用内部服务名，不公开 gRPC 端口。
+CloudDrive2 官方 Docker 示例使用 host network。HomeSphere 的 compose 已加入 `host.docker.internal:host-gateway`，同机部署推荐用 `http://host.docker.internal:19798` 访问 CD2。不要把 19798 放进公网反向代理；用主机防火墙限制到本机或管理局域网。
 
 ## 使用
 
