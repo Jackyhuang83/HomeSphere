@@ -16,8 +16,11 @@ git -C "$APP_DIR" reset --hard origin/main
 
 cd "$APP_DIR"
 
-say "更新 HomeSphere 与 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull homesphere media-bridge
+say "更新 HomeSphere 镜像"
+docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
+
+say "更新 Media Bridge 镜像"
+docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络后重试。"
 
 say "重启服务"
 docker compose "${COMPOSE_FILES[@]}" up -d
