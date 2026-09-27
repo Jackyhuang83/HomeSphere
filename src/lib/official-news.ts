@@ -28,9 +28,9 @@ export const OFFICIAL_NEWS_CHANNELS: OfficialNewsChannel[] = [
     id: 'phoenix-info',
     name: '凤凰卫视资讯台',
     region: '香港',
-    officialUrl: 'https://m.ifeng.com/video/videozb?mid=MYwRG',
+    officialUrl: 'https://flive.ifeng.com/customer/623.html',
     provider: '凤凰网',
-    note: '凤凰官方移动直播入口',
+    note: '凤凰资讯台官方桌面直播入口',
   },
   {
     id: 'global-news',
