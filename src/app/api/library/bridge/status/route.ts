@@ -6,12 +6,10 @@ import { getProbeMedia } from '@/lib/library/db';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 
-export async function GET(req:Request) {
-  const guarded=guardRequest(req);
-  if(guarded) return guarded;
+export async function GET(req:Request){
+  const guarded=guardRequest(req);if(guarded)return guarded;
   const health=getBridgeHealth();
-  const sample=health.libraryMode==='strm' ? getProbeMedia('strm') : null;
-  return NextResponse.json({...health,sampleAvailable:Boolean(sample)},{
+  return NextResponse.json({...health,sampleAvailable:Boolean(getProbeMedia())},{
     headers:{'Cache-Control':'private, no-store'}
   });
 }

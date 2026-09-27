@@ -1,129 +1,90 @@
 # HomeSphere
 
-HomeSphere 是一个面向**本人 / 家人 / 少量朋友**的私人家庭影视门户。
+HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋友使用。
 
-项目从 LibreTV 精简而来，已经移除公网 VOD 聚合、Apple CMS、多源点播搜索、TVBOX / SourceList 等体系。HomeSphere 当前只负责三件事：
+## 固定架构
 
-1. **私人片库**：读取本地 STRM，使用 SQLite + TMDB 构建海报墙。
-2. **影视发现**：豆瓣、Bangumi、影视热榜用于发现内容，不作为公网点播源。
-3. **电视直播**：M3U、EPG、频道搜索、收藏、测活和直播播放器。
-
-> 生产默认原则：**HomeSphere 不直接持有115账号凭据，也不扫描115网盘；Media Bridge 不需要暴露公网。**
-
----
-
-## 推荐架构
+HomeSphere **只认 STRM**。网盘账号、授权、目录同步和临时直链解析全部属于 Media Bridge 的职责，不进入 HomeSphere。
 
 ```text
-                    115
-                     │
-               官方授权/API
-                     │
-              ┌──────▼──────┐
-              │ Media Bridge│
-              │             │
-              │ ·115授权     │
-              │ ·增量同步    │
-              │ ·生成STRM    │
-              │ ·播放时302   │
-              └──────┬──────┘
-                     │
-        ┌────────────┴────────────┐
-        │ STRM 只读目录            │ 内网解析端点
-        ▼                         ▲
-     /media                       │
-        │                         │
-        └──────────┬──────────────┘
-                   ▼
-              HomeSphere
-              ├─ SQLite
-              ├─ TMDB
-              ├─ 海报墙
-              ├─ 推荐
-              └─ IPTV
-                   │
-                   ▼
-              iPhone / iPad
+115 / 其他存储
+      │
+      ▼
+Media Bridge
+  ├─ 持有存储授权
+  ├─ 生成 STRM
+  └─ 播放时返回 3xx
+      │
+      ├── /media/*.strm
+      └── 内网解析端点
+              │
+              ▼
+          HomeSphere
+          ├─ SQLite
+          ├─ TMDB
+          ├─ 海报墙
+          ├─ 推荐
+          └─ IPTV
+              │
+              ▼
+         iPhone / iPad
 ```
 
-播放时 HomeSphere 在服务器内部调用 Bridge，只取它返回的最终 CDN `Location`，然后把该 CDN URL 302 给客户端。Bridge 的管理/解析端口无需暴露互联网。
+**项目边界：**
 
-详细接口：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)
-Bridge 验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)
----
+- HomeSphere 不保存 115 Cookie、OAuth Token 或网盘账号。
+- HomeSphere 不调用 115/夸克等网盘 API。
+- HomeSphere 不实现 Cloud Provider。
+- HomeSphere 不代理视频字节。
+- HomeSphere 不绑定 CloudDrive2、OpenStrm 或其他具体 Bridge。
+- Bridge 只要满足 STRM + 3xx 契约即可替换。
+
+详细契约：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)  
+验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)
 
 ## 播放链路
 
-STRM 可以保存 Docker 内网地址：
+STRM 第一行保存 Bridge 的内网 HTTP(S) 解析地址：
 
 ```text
-http://media-bridge:12333/115/newurl?pickcode=xxxx
+http://media-bridge:12333/play/xxxx
 ```
 
-实际播放：
+播放时：
 
 ```text
 iPhone
   │ GET /api/play/:id
   ▼
 HomeSphere
-  │ 内网请求（携带同一 User-Agent）
+  │ 内网请求
   ▼
 Media Bridge
+  │ 3xx → 最终 CDN URL
+  ▼
+HomeSphere
   │ 302
   ▼
-HomeSphere 取得最终 115 CDN URL
-  │ 302
-  ▼
-iPhone ───────────────────► 115 CDN
+iPhone ───────────────► CDN
 ```
 
-因此：
+视频字节不经过 HomeSphere。
 
-- HomeSphere 不知道115 Cookie/OAuth Token；
-- Bridge 无需开放公网端口；
-- 视频字节不经过 HomeSphere；
-- 日常浏览/搜索不会访问 Bridge 或115。
+## 当前功能
 
----
-
-## 当前状态
-
-当前版本：**0.1.x**
-
-已完成：
-
-- 家庭密码登录 + 30天 HttpOnly Session
-- 整站 API 鉴权
+- 家庭密码登录与 30 天 HttpOnly Session
 - iPhone / iPad / 桌面响应式 WebUI
-- 豆瓣 / Bangumi / 影视热榜
-- IPTV：M3U / EPG / 搜索 / 收藏 / 最近观看 / 测活
-- STRM 生产默认片库
-- SQLite 本地作品/文件索引
+- STRM 只读扫描
+- SQLite 本地媒体索引
 - 电影 / 剧集作品级归组
-- 失效 STRM 本地索引清理
-- TMDB 自动匹配 + 人工纠错
-- **内网 Media Bridge 服务端解析**
-- 最终 CDN 302，不代理视频字节
-- Bridge 主机 allowlist
-- Bridge 静态安全状态卡
-- 手动真实播放链路探测（30秒限频，不回显临时URL）
-- STRM 模式残留115 Cookie 安全告警
-- 最终公网 URL SSRF 校验
-- Docker `/data` 持久化 + `/media:ro`
-- 115 Direct 仅高级兼容模式
+- 失效 STRM 清理
+- TMDB 自动匹配、海报、简介、人工纠错
+- Bridge allowlist、SSRF 防护和单条播放链路探测
+- 豆瓣 / Bangumi / 影视热榜
+- IPTV：M3U / EPG / 搜索 / 收藏 / 测活
+- Docker 持久化
 
-下一阶段：
-
-- 完成一个 Bridge 的真实端到端验证
-- 推荐榜单 → “搜我的片库”
-- 更完整播放器与字幕
-- STRM/NFO/字幕协同
-- Quark Bridge 后端预留
-
----
-
-## STRM 约定
+## STRM 目录
 
 ```text
 /media/Movies/Dune.Part.Two.2024.strm
@@ -131,18 +92,16 @@ iPhone ───────────────────► 115 CDN
 /media/TV/Silo/Season 01/Silo.S01E02.strm
 ```
 
-每个 STRM 第一行是 Bridge 的 HTTP(S) 解析 URL。
+电视剧会按“作品 → 季 → 集”归组，不会一集一张海报。
 
 HomeSphere：
 
 - 不跟随符号链接；
-- 只读 `.strm`；
-- 单文件最大16KiB；
+- 只读取 `.strm`；
+- 单个 STRM 最大 16 KiB；
 - 只接受 HTTP(S)；
-- 默认要求 Bridge host allowlist；
-- SQLite 按“作品 → 季/集 → STRM”归组。
-
----
+- STRM 目录以只读 volume 挂载；
+- 普通浏览、搜索和 TMDB 展示都不访问 Bridge。
 
 ## 快速开始
 
@@ -150,16 +109,11 @@ HomeSphere：
 cp .env.example .env
 ```
 
-至少设置：
+至少配置：
 
 ```env
 PASSWORD=你的家庭访问密码
-
-HOMESPHERE_LIBRARY_MODE=strm
 HOMESPHERE_STRM_PATH=./media
-
-# 推荐生产模式
-HOMESPHERE_STRM_PLAYBACK_MODE=resolve
 HOMESPHERE_STRM_ALLOWED_HOSTS=media-bridge
 ```
 
@@ -176,165 +130,44 @@ TMDB_LANGUAGE=zh-CN
 docker compose up -d --build
 ```
 
-HomeSphere：
+默认访问：
 
 ```text
 http://服务器IP:8080
 ```
 
-生产建议由 HTTPS 反向代理只暴露 HomeSphere。
+生产建议使用 HTTPS 反向代理，仅公开 HomeSphere。
 
----
-
-## Docker 挂载
+## Docker 数据
 
 ```text
 homesphere-data → /data
 ./media          → /media:ro
 ```
 
-`media/` 已加入 Git/Docker ignore，避免 STRM 内容误进入仓库或镜像。
-
-Media Bridge 后续部署在同一 Docker 网络时，不需要映射它的解析端口到宿主机公网。
-
----
-
-## 播放模式
-
-### resolve（默认推荐）
-
-```env
-HOMESPHERE_STRM_PLAYBACK_MODE=resolve
-HOMESPHERE_STRM_ALLOWED_HOSTS=media-bridge
-```
-
-HomeSphere 服务端调用 Bridge。
-
-安全约束：
-
-- allowlist 必填；
-- 只跟随 allowlist 内的少量内部跳转；
-- 最终跳出 Bridge 的 URL 必须为公网 HTTP(S)；
-- Bridge 返回 200 视频字节时拒绝；
-- 最终 CDN 地址通过安全检查后才 302。
-
-### direct（兼容）
-
-如果 STRM 本身是客户端可直接访问的安全签名 URL：
-
-```env
-HOMESPHERE_STRM_PLAYBACK_MODE=direct
-```
-
-此时 HomeSphere 只做登录鉴权后跳转。
-
----
-
-## Bridge 自检
-
-片库页会显示 **Media Bridge** 状态卡。
-
-静态检查不会访问115或Bridge，检查：
-
-- STRM目录是否可读；
-- 当前是否为resolve模式；
-- Bridge allowlist是否配置；
-- HomeSphere环境中是否错误残留115 Cookie；
-- 是否已经有可用于探测的STRM。
-
-同步至少一个STRM后，可以手动点击“测试播放链路”。
-
-该操作：
-
-- 只测试一条STRM；
-- 全局至少间隔30秒；
-- 会真实调用一次内网Bridge解析；
-- 只显示Bridge主机、最终CDN主机和耗时；
-- 不向浏览器返回完整115临时URL；
-- 不读取视频字节。
-
-完整验收步骤见 `docs/BRIDGE_VALIDATION.md`。
-
----
-
----
-
-## TMDB
-
-```env
-TMDB_API_TOKEN=...
-TMDB_LANGUAGE=zh-CN
-```
+数据库：
 
 ```text
-同步STRM
-  ↓
-SQLite
-  ↓
-整理海报
-  ↓
-TMDB
-  ├─ 高/中置信 → 自动入库
-  └─ 低置信/失败 → 人工修正
+/data/homesphere.sqlite
 ```
-
-普通片库浏览不访问 TMDB。
-
----
-
-## 生产安全边界
-
-HomeSphere 默认：
-
-- 不保存115凭据；
-- 不调用115目录/下载 API；
-- 不代理视频字节；
-- Bridge 端口可完全内网化；
-- STRM 目录只读；
-- 服务端 Bridge 请求受 host allowlist 限制；
-- 最终 CDN 地址拒绝私网/保留网段；
-- 登录后的 `/api/play/:id` 才能触发解析；
-- 不批量预解析播放链接。
-
-Media Bridge 是唯一应该持有115授权的组件。
-
-这降低了重复和异常调用面，但不能承诺第三方服务永远不会触发其自身限制。
-
----
-
-## 高级兼容：115 Direct
-
-仅开发/排障需要时：
-
-```env
-HOMESPHERE_LIBRARY_MODE=direct115
-HOMESPHERE_115_COOKIE=...
-HOMESPHERE_115_MEDIA_DIRS=["/电影","/电视剧"]
-```
-
-它不是正式交付默认路径。
-
----
 
 ## 环境变量
 
 | 变量 | 默认 | 用途 |
 |---|---|---|
 | `PASSWORD` | 必填 | 家庭访问密码 |
-| `HOMESPHERE_LIBRARY_MODE` | `strm` | `strm` / `direct115` |
+| `PROXY_SECRET` | 从 PASSWORD 派生 | Session 签名 |
 | `HOMESPHERE_STRM_PATH` | `./media` | 宿主机 STRM 目录 |
-| `HOMESPHERE_STRM_ROOT` | `/media` | 容器内 STRM 目录 |
-| `HOMESPHERE_STRM_PLAYBACK_MODE` | `resolve` | Bridge 服务端解析 / direct |
-| `HOMESPHERE_STRM_ALLOWED_HOSTS` | - | resolve 模式允许的 Bridge 主机 |
+| `HOMESPHERE_STRM_ROOT` | `/media` | 容器内 STRM 根目录 |
+| `HOMESPHERE_STRM_ALLOWED_HOSTS` | - | 允许访问的 Bridge 主机 |
 | `HOMESPHERE_BRIDGE_TIMEOUT_MS` | 12000 | Bridge 解析超时 |
-| `HOMESPHERE_BRIDGE_MAX_REDIRECTS` | 3 | 内部跳转上限 |
-| `HOMESPHERE_DATA_DIR` | Docker `/data` | SQLite |
+| `HOMESPHERE_BRIDGE_MAX_REDIRECTS` | 3 | Bridge 内部跳转上限 |
+| `HOMESPHERE_SYNC_MAX_ENTRIES` | 30000 | 单次扫描条目上限 |
+| `HOMESPHERE_SYNC_MAX_DIRS` | 5000 | 单次扫描目录上限 |
 | `TMDB_API_TOKEN` | - | TMDB Read Access Token |
-| `TMDB_LANGUAGE` | `zh-CN` | TMDB 返回语言 |
-| `SIXTYS_API_BASE` | 公共实例 | 可选自建 60s 热榜 API |\n| `DEFAULT_LIVE_SOURCES` | - | IPTV M3U / EPG |
+| `TMDB_LANGUAGE` | zh-CN | TMDB 返回语言 |
+| `DEFAULT_LIVE_SOURCES` | - | IPTV M3U / EPG |
 | `LIVE_ALLOW_PRIVATE` | 关闭 | 允许内网 IPTV |
-
----
 
 ## 开发验证
 
@@ -344,15 +177,8 @@ npm run typecheck
 npm run build
 ```
 
----
+## License
 
-## License / Upstream
-
-HomeSphere 基于 LibreTV 修改，继续遵循 **AGPL-3.0-or-later**。
-
-- LibreTV: https://github.com/LibreSpark/LibreTV
-- OpenStrm: https://github.com/indown/openStrm
-
-Direct115 兼容 Provider 的部分设计/加解密实现参考或适配自 OpenStrm MIT；详见 `THIRD_PARTY_NOTICES.md`。
+HomeSphere 基于 LibreTV 修改，继续遵循 **AGPL-3.0-or-later**。详见 `LICENSE` 和 `THIRD_PARTY_NOTICES.md`。
 
 HomeSphere 不包含、托管或提供任何影视内容。
