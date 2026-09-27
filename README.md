@@ -113,7 +113,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 Cloudflare HTTPS -> Tunnel -> 127.0.0.1:8080 -> HomeSphere
 ```
 
-Tunnel Token 采用与 MiniProbe 相同的本机保存方式：只写入 VPS 的 root-only 文件 `/etc/homesphere/cloudflared.env`（权限 `0600`），不进入 HomeSphere `.env`、Docker、数据库或 GitHub。systemd 开机自启，因此 VPS 重启后 Tunnel 会自动恢复。
+Cloudflare Tunnel 由部署脚本自动配置，并支持 VPS 重启后自动恢复。
 
 VPS 不需要开放 80 / 443 / 8080 / 12333。
 
