@@ -143,6 +143,7 @@ export default function LibraryPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-content">我的片库</h1>
             <p className="text-sm text-muted mt-1">
               当前来源：{sourceLabel}。日常浏览与搜索只读本地 SQLite。
+              {' · '}<Link href="/library/cd2" className="text-accent hover:underline">CD2兼容性诊断</Link>
             </p>
           </div>
           <div className="flex gap-2">

@@ -18,18 +18,29 @@ HomeSphere 的目标不是寻找“功能最多”的 Bridge，而是寻找：
 
 优点：
 
-- 官方当前明确支持 `115open`；
-- 官方文档明确建议旧115私有接口迁移到115open；
+- 当前推荐使用 `115open`；
 - Core 持续维护；
-- 提供完整 gRPC API；
-- API Token 可按权限授权，包括只读范围；
-- 官方明确限制115并发/请求节奏，方向符合 HomeSphere 的保守策略。
+- 有公开完整 gRPC API；
+- API Token 可以限制根目录、有效期与具体操作权限；
+- `GetDownloadUrlPath` 明确支持 `get_direct_url=true`；
+- 返回 `directUrl`、有效期、推荐 `userAgent` 与 `additionalHeaders`；
+- 这使 HomeSphere 理论上可以只持有一个“限目录 + 只读”的 CD2 Token，而不接触115凭据。
 
-进一步核对官方配套媒体插件后，CloudDrive2 更适合做115open文件系统层：它的媒体直播放式偏向“把服务端路径映射回客户端自己的 CloudDrive2 App”，相关 Resolve 接口返回路径而不是浏览器可用的最终直链 URL。
+浏览器场景的关键限制：
 
-因此 CloudDrive2 **不能单独完成 HomeSphere 所需的浏览器 302 Bridge 契约**。如果未来使用它，需要再加一个明确、可审计的 resolver 适配层；否则通过挂载/WebDAV读取电影字节会让服务器进入数据通路，不符合 HomeSphere 目标。
+- CD2 的 directUrl 可能要求指定 User-Agent 或额外 Header；
+- 普通 Safari/Chrome 经过 HTTP 302 后不能由 HomeSphere 强制追加这些 Header；
+- CloudDrive2 官方的跨设备 Direct Stream 主要通过 CloudDrive 客户端协作，而不是把任意浏览器当作另一个 CloudDrive 客户端；
+- 因此不能仅凭“API 返回 directUrl”就宣称 HomeSphere WebUI 已经可以安全直连。
 
-**状态：可作为115open底层，但不是独立默认 Bridge。**
+HomeSphere 已加入最小 CD2 兼容性探针：
+
+- 不引入第三方 gRPC 依赖；
+- 只调用 `GetDownloadUrlPath`；
+- 不回显 Token、完整直链或 Header 值；
+- 只有在无额外 Header、UA 条件匹配、目标为公网 URL 时才允许 iPhone/Safari 做一次302实测。
+
+**状态：第一优先验证对象；通过真实115open + iPhone测试后，才决定是否升级为默认两组件架构。**
 
 ### OpenStrm
 
@@ -48,6 +59,24 @@ HomeSphere 的目标不是寻找“功能最多”的 Bridge，而是寻找：
 - 这和 HomeSphere“生产优先官方开放平台”的交付原则不完全一致。
 
 **状态：功能适配度高，作为兼容/实验候选，不作为默认生产推荐。**
+
+### SmartStrm
+
+优点：
+
+- 当前仍维护；
+- STRM 生成成熟；
+- 支持多种网盘；
+- 支持302直链玩法。
+
+当前限制：
+
+- CloudDrive2 gRPC 作为直接文件源仍是公开 issue 中的需求，并未成为现成驱动；
+- 现有社区方案主要是 CD2 WebDAV 做目录层，再把 STRM URL 替换到另一套115解析入口；
+- 这会重新形成多个115访问入口，不符合 HomeSphere“一个受控入口”的目标；
+- 302能力还涉及 Pro 功能与额外配置。
+
+**状态：不作为 HomeSphere 默认 Bridge；不采用 CD2 WebDAV + 第二套115 resolver 的叠层方案。**
 
 ### QMediaSync
 
@@ -93,10 +122,11 @@ HomeSphere：内网解析 → 最终 CDN 302
 当前优先级：
 
 ```text
-1. 寻找/验证“115open + STRM + 3xx resolver”的轻量独立 Bridge
-2. CloudDrive2 可作为115open文件系统底层，但需要 resolver 适配层
-3. QMediaSync 的 /115/newurl 作为 resolver 接口形态参考
-4. OpenStrm 作为 Cookie 模式兼容候选
+1. 使用 HomeSphere 内置探针验证 CloudDrive2 + 115open 的浏览器直链条件
+2. 若 iPhone/Safari 实测 PASS，再评估收敛为 CloudDrive2 + HomeSphere 两组件
+3. 若 CD2 directUrl 需要浏览器无法携带的 Header，则保持 STRM/3xx Bridge 契约
+4. QMediaSync 的 /115/newurl 继续作为 resolver 接口形态参考
+5. OpenStrm 作为 Cookie 模式兼容候选
 ```
 
 所有候选必须按 `BRIDGE_VALIDATION.md` 完成真实115账号 + iPhone测试，才能升级为 PASS。
