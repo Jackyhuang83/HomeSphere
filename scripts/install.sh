@@ -62,6 +62,12 @@ fi
 cd "$APP_DIR"
 mkdir -p bridge-config media
 chmod 700 bridge-config
+chmod +x scripts/*.sh 2>/dev/null || true
+cat > /usr/local/bin/homesphere <<'EOF'
+#!/usr/bin/env bash
+exec bash /opt/homesphere/scripts/manage.sh "$@"
+EOF
+chmod 755 /usr/local/bin/homesphere
 
 if [ ! -f .env ]; then
   say "设置家庭登录密码"
@@ -173,6 +179,11 @@ SSH 登录 VPS 后运行：
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
 
 即可查看当前密码、生成新的随机密码或设置自己的密码。
+
+以后 SSH 登录 VPS 后，直接运行：
+homesphere
+
+即可进入统一管理界面。
 EOF
 
 if [ -f .env ]; then
