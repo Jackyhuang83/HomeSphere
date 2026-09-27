@@ -64,7 +64,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - Bridge allowlist、SSRF 防护、限速、短缓存和熔断
 - 播放链路探测
 - 豆瓣 / Bangumi / 影视热榜
-- IPTV：M3U / EPG / 搜索 / 收藏 / 测活
+- 直播：精简官方新闻入口 + 自定义 M3U / EPG / 搜索 / 收藏 / 测活
 - 首次使用检查页 `/setup`
 
 ## 快速开始
