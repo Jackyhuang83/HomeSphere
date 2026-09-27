@@ -113,6 +113,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 Cloudflare HTTPS -> Tunnel -> 127.0.0.1:8080 -> HomeSphere
 ```
 
+**Tunnel Token 不落盘保存。** 它只用于当前启动周期的 cloudflared 运行时；VPS 重启后需要重新运行 `scripts/https.sh` 并再次输入 Token。
+
 VPS 不需要开放 80 / 443 / 8080 / 12333。
 
 默认情况下：
