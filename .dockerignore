@@ -14,10 +14,21 @@ tsconfig.tsbuildinfo
 .gitignore
 .github
 
-# 本地环境与日志
-.env
-.env*.local
+# 本地环境、凭据与日志：一律不进入 Docker build context
+.env*
+.npmrc
+.netrc
+*.pem
+*.key
+*.p12
+*.pfx
 *.log
+
+# 运行期数据
+bridge-config
+*.db
+*.db-wal
+*.db-shm
 
 # 文档与编排文件（不参与镜像构建）
 Dockerfile
