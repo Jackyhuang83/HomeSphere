@@ -363,18 +363,15 @@ Cloudflare Tunnel Token
 然后自动完成：
 
 - 安装 / 检查 `cloudflared`；
-- Tunnel Token **只保存在 VPS 本机 root-only 文件** `/etc/homesphere/cloudflared.env`；
-- 文件权限固定为 `0600`，只有 root 可读取；
-- 使用 systemd 常驻服务运行 `cloudflared`；
+- 自动配置并启动 `cloudflared`；
+- 自动设置开机恢复；
 - 启动 Cloudflare Tunnel；
 - 验证公网 HTTPS 是否可访问；
 - 开启 HomeSphere Secure Cookie；
 - 自动重启 HomeSphere；
 - 如果之前装过旧版持久化 Token 文件或 Caddy，会自动清理。
 
-Tunnel Token 不写入 HomeSphere `.env`、Docker volume、GitHub、数据库或网页，只保存在 VPS 本机的 root-only 文件中。
-
-这样与 MiniProbe 的实现保持一致：**VPS 重启后 systemd 会自动恢复 Cloudflare Tunnel，不需要重新输入 Token。**
+配置完成后，**VPS 重启会自动恢复 Cloudflare Tunnel，不需要重新输入 Token。**
 
 你仍然不需要编辑任何服务器文件。
 
