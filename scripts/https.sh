@@ -2,76 +2,176 @@
 set -Eeuo pipefail
 
 APP_DIR="/opt/homesphere"
+ENV_FILE="$APP_DIR/.env"
+CF_ENV_DIR="/etc/homesphere"
+CF_ENV_FILE="$CF_ENV_DIR/cloudflared.env"
+CF_RUNNER="$APP_DIR/run-cloudflared.sh"
+CF_SERVICE="/etc/systemd/system/homesphere-cloudflared.service"
 COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.bridge.yml)
 
 say() { printf '\n==> %s\n' "$*"; }
 fail() { printf '\n[错误] %s\n' "$*" >&2; exit 1; }
 
 [ "${EUID}" -eq 0 ] || fail "请先在 SSH 中执行 sudo -i，再重新运行本命令。"
-[ -f "$APP_DIR/.env" ] || fail "没有检测到 HomeSphere。请先运行一键安装命令。"
+[ -f "$ENV_FILE" ] || fail "没有检测到 HomeSphere。请先运行一键安装命令。"
 command -v docker >/dev/null 2>&1 || fail "Docker 不存在，请先运行一键安装。"
+command -v systemctl >/dev/null 2>&1 || fail "当前系统没有 systemd，暂不支持自动配置 Cloudflare Tunnel。"
+
+cat <<'EOF'
+
+HomeSphere 将使用 Cloudflare Tunnel 提供公网 HTTPS。
+VPS 不需要开放 80 / 443 / 8080 / 12333。
+
+请先在 Cloudflare 控制台完成：
+1. 创建 Remotely-managed Tunnel；
+2. 添加 Public Hostname，例如 media.example.com；
+3. Service 填：
+      http://127.0.0.1:8080
+4. 复制该 Tunnel 的 Token（以 eyJ... 开头）。
+
+这和 MiniProbe 使用的 Cloudflare Tunnel 模式一致。
+EOF
 
 echo
-read -r -p "请输入 HomeSphere 域名（例如 media.example.com，不要带 http://）： " DOMAIN
+read -r -p "请输入 HomeSphere 域名（例如 media.example.com）： " DOMAIN
 DOMAIN="${DOMAIN#http://}"
 DOMAIN="${DOMAIN#https://}"
 DOMAIN="${DOMAIN%%/*}"
-[ -n "$DOMAIN" ] || fail "域名不能为空。"
+[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || fail "域名格式不正确。"
 
-if ! getent ahosts "$DOMAIN" >/dev/null 2>&1; then
-  fail "当前还解析不到 $DOMAIN。请先把域名 DNS 指向这台 VPS，然后重新运行本命令。"
+read -r -s -p "请输入 Cloudflare Tunnel Token： " TUNNEL_TOKEN
+echo
+[ "${#TUNNEL_TOKEN}" -ge 20 ] || fail "Tunnel Token 看起来无效。"
+
+say "安装 / 检查 cloudflared"
+if ! command -v cloudflared >/dev/null 2>&1 || ! cloudflared --version >/dev/null 2>&1; then
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    x86_64|amd64) ASSET="cloudflared-linux-amd64" ;;
+    aarch64|arm64) ASSET="cloudflared-linux-arm64" ;;
+    *) fail "当前 CPU 架构 $ARCH 暂不支持自动安装 cloudflared。" ;;
+  esac
+
+  TMP="/usr/local/bin/.cloudflared.homesphere.tmp"
+  curl -fL --retry 3 --connect-timeout 10     "https://github.com/cloudflare/cloudflared/releases/latest/download/$ASSET"     -o "$TMP"
+  chmod 755 "$TMP"
+  "$TMP" --version >/dev/null
+  mv -f "$TMP" /usr/local/bin/cloudflared
 fi
+cloudflared --version
 
-say "检查 80/443 端口"
+say "清理旧的 Caddy 入口（如果存在）"
 docker rm -f homesphere-caddy >/dev/null 2>&1 || true
-for PORT in 80 443; do
-  if ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$PORT$"; then
-    fail "$PORT 端口已经被其他程序占用。请把 'ss -ltnp | grep :$PORT' 的结果发给我。"
+docker volume rm homesphere-caddy-data homesphere-caddy-config >/dev/null 2>&1 || true
+docker image rm caddy:2-alpine >/dev/null 2>&1 || true
+rm -rf "$APP_DIR/caddy" >/dev/null 2>&1 || true
+
+say "创建 HomeSphere Cloudflare Tunnel 服务"
+mkdir -p "$CF_ENV_DIR"
+chmod 750 "$CF_ENV_DIR"
+
+cat > "$CF_ENV_FILE" <<EOF
+TUNNEL_TOKEN='$TUNNEL_TOKEN'
+HOMESPHERE_DOMAIN='$DOMAIN'
+EOF
+chmod 600 "$CF_ENV_FILE"
+
+cat > "$CF_RUNNER" <<'EOF'
+#!/bin/sh
+set -eu
+. /etc/homesphere/cloudflared.env
+exec /usr/local/bin/cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN"
+EOF
+chmod 700 "$CF_RUNNER"
+
+cat > "$CF_SERVICE" <<EOF
+[Unit]
+Description=HomeSphere Cloudflare Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=$CF_RUNNER
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now homesphere-cloudflared >/dev/null
+
+say "验证 Cloudflare Tunnel"
+OK=0
+for _ in $(seq 1 30); do
+  CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "https://$DOMAIN/api/auth" 2>/dev/null || true)"
+  if [ "$CODE" = "200" ]; then
+    OK=1
+    break
   fi
+  sleep 2
 done
 
-say "生成 HTTPS 配置"
-mkdir -p "$APP_DIR/caddy"
-cat > "$APP_DIR/caddy/Caddyfile" <<EOF
-$DOMAIN {
-    encode zstd gzip
-    reverse_proxy 127.0.0.1:8080
-    header {
-        Strict-Transport-Security "max-age=31536000"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "SAMEORIGIN"
-        Referrer-Policy "strict-origin-when-cross-origin"
-    }
-}
-EOF
-chmod 600 "$APP_DIR/caddy/Caddyfile"
-
-docker pull caddy:2-alpine
-
-say "启动 HTTPS 入口"
-docker run -d   --name homesphere-caddy   --restart unless-stopped   --network host   -v "$APP_DIR/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"   -v homesphere-caddy-data:/data   -v homesphere-caddy-config:/config   caddy:2-alpine >/dev/null
-
-cd "$APP_DIR"
-if grep -q '^COOKIE_SECURE=' .env; then
-  sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=true/' .env
-else
-  printf '\nCOOKIE_SECURE=true\n' >> .env
+if [ "$OK" -ne 1 ]; then
+  systemctl stop homesphere-cloudflared >/dev/null 2>&1 || true
+  echo
+  echo "Cloudflare Tunnel 暂未验证成功。"
+  echo "请确认 Cloudflare 的 Public Hostname Service 是否准确填写："
+  echo
+  echo "    http://127.0.0.1:8080"
+  echo
+  echo "然后执行下面命令查看 Tunnel 日志："
+  echo
+  echo "    journalctl -u homesphere-cloudflared -n 100 --no-pager"
+  echo
+  echo "如果 VPS 限制出站流量，还需要允许 cloudflared 访问 Cloudflare 的 7844 端口。"
+  exit 1
 fi
 
-docker compose "${COMPOSE_FILES[@]}" up -d homesphere >/dev/null
+say "启用 Secure Cookie"
+cd "$APP_DIR"
+if grep -q '^COOKIE_SECURE=' "$ENV_FILE"; then
+  sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=true/' "$ENV_FILE"
+else
+  printf '\nCOOKIE_SECURE=true\n' >> "$ENV_FILE"
+fi
+docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere >/dev/null
 
-sleep 3
-say "HTTPS 状态"
-docker ps --filter name=homesphere-caddy --format 'table {{.Names}}\t{{.Status}}'
-docker logs --tail 20 homesphere-caddy 2>&1 || true
+say "Cloudflare Tunnel 状态"
+systemctl --no-pager --full status homesphere-cloudflared | sed -n '1,12p' || true
 
 cat <<EOF
 
-如果 VPS 服务商有独立防火墙/安全组，请确保 TCP 80 和 443 可以访问。
-服务器上的配置已经自动完成，不需要你编辑任何文件。
+配置完成。
 
-浏览器访问：
+HomeSphere 公网地址：
 https://$DOMAIN
 
-确认 HTTPS 正常后，就可以把这个地址给家人或朋友使用。
+当前网络边界：
+Cloudflare -> Tunnel -> 127.0.0.1:8080 -> HomeSphere
+
+VPS 不需要开放：
+- TCP 80
+- TCP 443
+- TCP 8080
+- TCP 12333
+
+HomeSphere 和 Media Bridge 继续只监听 VPS 本机。
+
+以后查看 Tunnel 状态：
+systemctl status homesphere-cloudflared --no-pager
+
+查看 Tunnel 日志：
+journalctl -u homesphere-cloudflared -n 100 --no-pager
 EOF
