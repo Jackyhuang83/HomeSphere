@@ -40,6 +40,7 @@ Media Bridge
 - Bridge 只要满足 STRM + 3xx 契约即可替换。
 
 详细契约：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)  
+115 保守部署：[`docs/BRIDGE_115_SAFE_PROFILE.md`](docs/BRIDGE_115_SAFE_PROFILE.md)  
 验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)
 
 ## 播放链路
