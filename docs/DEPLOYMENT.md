@@ -302,69 +302,109 @@ docker stats --no-stream
 
 ---
 
-## 8. 准备给家人朋友使用：开启 HTTPS
+## 8. 准备给家人朋友使用：Cloudflare Tunnel HTTPS
 
-不要直接把：
+HomeSphere 正式公网访问统一使用 **Cloudflare Tunnel**，和 MiniProbe 的安全访问思路一致。
 
-```text
-http://VPS_IP:8080
-```
+不再使用 Caddy / Nginx 直接反代，也不需要把 80 / 443 暴露给公网。
 
-发给家人使用。
-
-家庭登录密码必须通过 HTTPS 传输。
-
-先把你准备使用的域名解析到 VPS。
-
-然后 SSH 中运行：
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
-```
-
-脚本会询问：
+最终链路：
 
 ```text
-HomeSphere 域名
+家人 / 朋友
+    │
+    ▼
+Cloudflare HTTPS
+    │
+    ▼
+Cloudflare Tunnel
+    │
+    ▼
+127.0.0.1:8080
+    │
+    ▼
+HomeSphere
 ```
 
-例如：
+### 第一步：Cloudflare 网页里创建 Tunnel
+
+在 Cloudflare 控制台：
+
+1. 创建 **Remotely-managed Tunnel**；
+2. 添加一个 Public Hostname，例如：
 
 ```text
 media.example.com
 ```
 
+3. Service 填：
+
+```text
+http://127.0.0.1:8080
+```
+
+4. 复制 Tunnel Token，也就是以 `eyJ...` 开头的一长串字符。
+
+这里不需要 Cloudflare API Key。
+
+### 第二步：SSH 中执行一条命令
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
+```
+
+脚本会让你输入：
+
+```text
+HomeSphere 域名
+Cloudflare Tunnel Token
+```
+
 然后自动完成：
 
-- HTTPS 入口；
-- TLS 证书；
-- 反向代理；
-- Secure Cookie；
-- Caddy 容器；
-- HomeSphere 重启。
+- 安装 / 检查 `cloudflared`；
+- 保存 Tunnel Token；
+- 创建独立的 `homesphere-cloudflared` systemd 服务；
+- 启动 Cloudflare Tunnel；
+- 验证公网 HTTPS 是否可访问；
+- 开启 HomeSphere Secure Cookie；
+- 自动重启 HomeSphere；
+- 如果之前装过旧版 Caddy，会自动清理。
 
-你仍然不需要编辑任何配置文件。
+你仍然不需要编辑任何服务器文件。
 
-完成后使用：
+### 第三步：访问
 
 ```text
 https://你的域名
 ```
 
-给家人或朋友访问。
+### 端口安全
 
-### 注意
-
-如果 VPS 服务商还有“安全组 / 云防火墙”，需要允许：
+使用 Cloudflare Tunnel 后，VPS **不需要开放**：
 
 ```text
 TCP 80
 TCP 443
+TCP 8080
+TCP 12333
 ```
 
-12333 不要开放公网。
+HomeSphere 继续只监听：
 
-8080 也不需要开放公网。
+```text
+127.0.0.1:8080
+```
+
+Media Bridge 继续只监听：
+
+```text
+127.0.0.1:12333
+```
+
+cloudflared 是从 VPS 主动向 Cloudflare 建立出站连接，因此不会新增公网入站端口。
+
+如果你的 VPS 对出站流量做了严格限制，Cloudflare Tunnel 需要能够连接 Cloudflare 的 7844 端口。
 
 ---
 
@@ -443,10 +483,12 @@ homesphere
 media-bridge
 ```
 
-启用 HTTPS 后还会看到：
+Cloudflare Tunnel 不运行在 Docker 中，所以 `docker ps` 不会显示它。
 
-```text
-homesphere-caddy
+查看 Tunnel 状态：
+
+```bash
+systemctl status homesphere-cloudflared --no-pager
 ```
 
 ---
@@ -473,12 +515,12 @@ docker logs --tail 100 media-bridge
 
 把完整输出发给我。
 
-### HTTPS 有问题
+### Cloudflare Tunnel / HTTPS 有问题
 
 执行：
 
 ```bash
-docker logs --tail 100 homesphere-caddy
+journalctl -u homesphere-cloudflared -n 100 --no-pager
 ```
 
 把完整输出发给我。
@@ -544,7 +586,7 @@ VPS 中只保存：
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
 ```
 
-配置 HTTPS：
+配置 Cloudflare Tunnel HTTPS：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
