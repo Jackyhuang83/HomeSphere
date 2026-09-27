@@ -24,7 +24,7 @@ get_password() {
 
 validate_password() {
   local value="$1"
-  [ "${#value}" -ge 8 ] || return 1
+  [ "${#value}" -ge 12 ] || return 1
   [[ "$value" =~ ^[A-Za-z0-9@._%+=:!,-]+$ ]]
 }
 
@@ -94,7 +94,7 @@ while true; do
   echo " HomeSphere 家庭密码管理"
   echo "=============================="
   echo "1. 查看当前密码"
-  echo "2. 重新生成 20 位随机密码"
+  echo "2. 重新生成安全随机密码"
   echo "3. 设置自己的密码"
   echo "0. 退出"
   echo
@@ -111,12 +111,12 @@ while true; do
       echo
       ;;
     2)
-      NEW_PASSWORD="$(openssl rand -hex 10)"
+      NEW_PASSWORD="$(openssl rand -hex 16)"
       apply_new_password "$NEW_PASSWORD"
       ;;
     3)
       while true; do
-        read -r -s -p "请输入新密码（至少 8 位，只支持字母、数字和 @ . _ % + = : ! , -）： " NEW_PASSWORD
+        read -r -s -p "请输入新的家庭访问密码： " NEW_PASSWORD
         echo
         validate_password "$NEW_PASSWORD" || {
           echo "密码格式不符合要求，请重新输入。"
