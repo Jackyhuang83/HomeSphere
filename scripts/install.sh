@@ -102,7 +102,7 @@ PASSWORD='$PASSWORD'
 PROXY_SECRET=$SESSION_SECRET
 COOKIE_SECURE=false
 
-HOMESPHERE_IMAGE=homesphere:local
+HOMESPHERE_IMAGE=ghcr.io/jackyhuang83/homesphere:edge
 HOMESPHERE_STRM_ROOT=/media
 HOMESPHERE_STRM_PATH=./media
 HOMESPHERE_STRM_ALLOWED_HOSTS=media-bridge
@@ -126,16 +126,14 @@ else
   echo "检测到已有 .env，保留现有账号配置。"
 fi
 
-say "拉取 Media Bridge"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge
-
-say "构建 HomeSphere"
-docker compose "${COMPOSE_FILES[@]}" build homesphere
+say "拉取 HomeSphere 与 Media Bridge"
+docker compose "${COMPOSE_FILES[@]}" pull homesphere media-bridge
 
 say "启动 HomeSphere 与 Media Bridge"
 docker compose "${COMPOSE_FILES[@]}" up -d
 
-docker builder prune -f >/dev/null 2>&1 || true
+# 清理更新后不再使用的旧镜像，避免 10GB VPS 长期堆积。
+docker image prune -f >/dev/null 2>&1 || true
 
 say "部署结果"
 docker compose "${COMPOSE_FILES[@]}" ps
