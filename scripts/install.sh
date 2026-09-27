@@ -126,8 +126,11 @@ else
   echo "检测到已有 .env，保留现有账号配置。"
 fi
 
-say "拉取 HomeSphere 与 Media Bridge"
-docker compose "${COMPOSE_FILES[@]}" pull homesphere media-bridge
+say "拉取 HomeSphere 镜像"
+docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
+
+say "拉取 Media Bridge 镜像"
+docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。请检查 VPS 网络后重试。"
 
 say "启动 HomeSphere 与 Media Bridge"
 docker compose "${COMPOSE_FILES[@]}" up -d
