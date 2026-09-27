@@ -33,6 +33,14 @@ tunnel_state() {
   fi
 }
 
+tmdb_state() {
+  if grep -Eq "^TMDB_API_TOKEN='?[^']+'?$" "$APP_DIR/.env" 2>/dev/null; then
+    printf '已配置'
+  else
+    printf '未配置'
+  fi
+}
+
 show_status() {
   clear
   echo "HomeSphere 管理"
@@ -41,9 +49,75 @@ show_status() {
   printf "版本:           %s\n" "$(version)"
   printf "HomeSphere:     %s\n" "$(container_state homesphere)"
   printf "Media Bridge:   %s\n" "$(container_state media-bridge)"
+  printf "TMDB:           %s\n" "$(tmdb_state)"
   printf "Cloudflare:     %s\n" "$(tunnel_state)"
   echo
   docker compose "${COMPOSE_FILES[@]}" ps 2>/dev/null || true
+}
+
+tmdb_menu() {
+  while true; do
+    clear
+    cat <<EOF
+TMDB 元数据
+
+当前状态: $(tmdb_state)
+
+1. 配置 / 更换 Token
+2. 清除 Token
+0. 返回
+EOF
+    printf "\n请选择: "
+    read -r choice
+    case "$choice" in
+      1)
+        echo
+        read -r -s -p "请输入 TMDB API Read Access Token: " token
+        echo
+        [ -n "$token" ] || { echo "Token 不能为空。"; pause; continue; }
+        [[ "$token" != *"'"* ]] || { echo "Token 格式不正确。"; pause; continue; }
+
+        printf "正在验证 Token..."
+        http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 \
+          -H "Authorization: Bearer $token" \
+          -H "Accept: application/json" \
+          https://api.themoviedb.org/3/configuration || true)"
+        if [ "$http_code" != "200" ]; then
+          echo
+          echo "Token 验证失败（HTTP ${http_code:-network error}），没有修改现有配置。"
+          pause
+          continue
+        fi
+        echo " 通过"
+
+        umask 077
+        tmp="$(mktemp "$APP_DIR/.env.tmp.XXXXXX")"
+        grep -v '^TMDB_API_TOKEN=' "$APP_DIR/.env" > "$tmp" || true
+        printf "TMDB_API_TOKEN='%s'\n" "$token" >> "$tmp"
+        chmod 600 "$tmp"
+        mv "$tmp" "$APP_DIR/.env"
+        unset token
+
+        say "重启 HomeSphere"
+        docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere
+        echo "TMDB 已配置。刷新 HomeSphere 后，详情页会自动补充简介、年份和背景图。"
+        pause
+        ;;
+      2)
+        umask 077
+        tmp="$(mktemp "$APP_DIR/.env.tmp.XXXXXX")"
+        grep -v '^TMDB_API_TOKEN=' "$APP_DIR/.env" > "$tmp" || true
+        printf "TMDB_API_TOKEN=''\n" >> "$tmp"
+        chmod 600 "$tmp"
+        mv "$tmp" "$APP_DIR/.env"
+        docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere
+        echo "TMDB Token 已清除。"
+        pause
+        ;;
+      0) return ;;
+      *) ;;
+    esac
+  done
 }
 
 restart_services() {
@@ -177,9 +251,10 @@ HomeSphere $(version)
 4. 启动服务
 5. 停止服务
 6. 家庭密码管理
-7. Cloudflare Tunnel
-8. 查看日志
-9. 系统资源
+7. TMDB 元数据
+8. Cloudflare Tunnel
+9. 查看日志
+10. 系统资源
 0. 退出
 EOF
 
@@ -193,9 +268,10 @@ EOF
     4) start_services; pause ;;
     5) stop_services; pause ;;
     6) bash "$APP_DIR/scripts/password.sh"; pause ;;
-    7) tunnel_menu ;;
-    8) logs_menu ;;
-    9) show_resources; pause ;;
+    7) tmdb_menu ;;
+    8) tunnel_menu ;;
+    9) logs_menu ;;
+    10) show_resources; pause ;;
     0) exit 0 ;;
     *) ;;
   esac
