@@ -1,5 +1,5 @@
 import type { MediaType } from '@/lib/library/types';
-import { SerialRateLimiter } from '@/lib/cloud/rate-limit';
+import { SerialRateLimiter } from '@/lib/rate-limit';
 
 const API_BASE='https://api.themoviedb.org/3';
 const IMAGE_BASE='https://image.tmdb.org/t/p';
@@ -38,28 +38,26 @@ export async function searchTmdb(query:string,mediaType:MediaType,year?:string,s
   if(!q) return [];
   const params:Record<string,string>={
     query:q,
-    language:process.env.TMDB_LANGUAGE?.trim() || 'zh-CN',
+    language:process.env.TMDB_LANGUAGE?.trim()||'zh-CN',
     include_adult:'false',
     page:'1',
   };
   if(year) params[mediaType==='movie'?'year':'first_air_date_year']=year;
   const data=await tmdbFetch<{results?:RawItem[]}>(`/search/${mediaType}`,params,signal);
-  return (data.results || []).slice(0,12).map(item=>mapItem(item,mediaType));
+  return (data.results||[]).slice(0,12).map(item=>mapItem(item,mediaType));
 }
 
 export async function getTmdbDetails(mediaType:MediaType,id:number,signal?:AbortSignal):Promise<TmdbItem|null> {
-  try {
-    const data=await tmdbFetch<RawItem>(`/${mediaType}/${id}`,{
-      language:process.env.TMDB_LANGUAGE?.trim() || 'zh-CN',
-    },signal);
+  try{
+    const data=await tmdbFetch<RawItem>(`/${mediaType}/${id}`,{language:process.env.TMDB_LANGUAGE?.trim()||'zh-CN'},signal);
     return mapItem(data,mediaType);
-  } catch(error) {
-    if(error instanceof Error && error.message==='TMDB HTTP 404') return null;
+  }catch(error){
+    if(error instanceof Error&&error.message==='TMDB HTTP 404') return null;
     throw error;
   }
 }
 
-async function tmdbFetch<T>(pathname:string,params:Record<string,string>,signal?:AbortSignal):Promise<T> {
+async function tmdbFetch<T>(pathname:string,params:Record<string,string>,signal?:AbortSignal):Promise<T>{
   const token=process.env.TMDB_API_TOKEN?.trim();
   if(!token) throw new Error('未配置 TMDB_API_TOKEN');
   return limiter.schedule(async()=>{
@@ -75,16 +73,14 @@ async function tmdbFetch<T>(pathname:string,params:Record<string,string>,signal?
   },signal);
 }
 
-function mapItem(raw:RawItem,mediaType:MediaType):TmdbItem {
-  const date=raw.release_date || raw.first_air_date || '';
+function mapItem(raw:RawItem,mediaType:MediaType):TmdbItem{
+  const date=raw.release_date||raw.first_air_date||'';
   return {
-    id:raw.id,
-    mediaType,
-    title:raw.title || raw.name || '',
-    originalTitle:raw.original_title || raw.original_name || undefined,
-    year:date ? date.slice(0,4) : undefined,
-    posterUrl:raw.poster_path ? `${IMAGE_BASE}/w500${raw.poster_path}` : undefined,
-    backdropUrl:raw.backdrop_path ? `${IMAGE_BASE}/w780${raw.backdrop_path}` : undefined,
-    overview:raw.overview || undefined,
+    id:raw.id,mediaType,title:raw.title||raw.name||'',
+    originalTitle:raw.original_title||raw.original_name||undefined,
+    year:date?date.slice(0,4):undefined,
+    posterUrl:raw.poster_path?`${IMAGE_BASE}/w500${raw.poster_path}`:undefined,
+    backdropUrl:raw.backdrop_path?`${IMAGE_BASE}/w780${raw.backdrop_path}`:undefined,
+    overview:raw.overview||undefined,
   };
 }
