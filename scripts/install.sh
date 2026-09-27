@@ -158,7 +158,11 @@ cat <<'EOF'
    Media Bridge: http://127.0.0.1:12333
 
 2. 准备给家人/朋友长期使用：
-   需要 HTTPS。等域名已经解析到这台 VPS 后，在 SSH 中运行：
+   使用 Cloudflare Tunnel 提供 HTTPS，不需要把域名直接解析到 VPS，也不需要开放 80/443。
+   先在 Cloudflare 创建 Remotely-managed Tunnel，并把 Public Hostname 的 Service 指向：
+   http://127.0.0.1:8080
+
+   然后在 SSH 中运行：
    bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
 
 Media Bridge 默认账号通常为 admin / admin123。
