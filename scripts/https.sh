@@ -23,6 +23,7 @@ if ! getent ahosts "$DOMAIN" >/dev/null 2>&1; then
 fi
 
 say "检查 80/443 端口"
+docker rm -f homesphere-caddy >/dev/null 2>&1 || true
 for PORT in 80 443; do
   if ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$PORT$"; then
     fail "$PORT 端口已经被其他程序占用。请把 'ss -ltnp | grep :$PORT' 的结果发给我。"
@@ -45,7 +46,6 @@ $DOMAIN {
 EOF
 chmod 600 "$APP_DIR/caddy/Caddyfile"
 
-docker rm -f homesphere-caddy >/dev/null 2>&1 || true
 docker pull caddy:2-alpine
 
 say "启动 HTTPS 入口"
