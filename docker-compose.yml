@@ -6,6 +6,9 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    # 访问按官方 host-network 方式运行的 CloudDrive2；不会开放新端口。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       PASSWORD: ${PASSWORD:?请在 .env 中设置 PASSWORD}
       PROXY_SECRET: ${PROXY_SECRET:-}
