@@ -13,7 +13,8 @@ export default function HomePage() {
         <section className="mb-7">
           <h1 className="text-3xl sm:text-4xl font-bold text-content">影视发现</h1>
           <p className="text-sm text-muted mt-2">
-            看榜单发现新片；已有内容可进入 <Link href="/library" className="text-accent hover:underline">我的115片库</Link>。
+            看榜单发现新片；已有内容可进入 <Link href="/library" className="text-accent hover:underline">我的片库</Link>。
+            首次部署先看 <Link href="/setup" className="text-accent hover:underline">首次使用检查</Link>。
           </p>
         </section>
         <RecommendSection />
