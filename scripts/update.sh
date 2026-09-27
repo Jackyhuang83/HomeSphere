@@ -15,6 +15,12 @@ git -C "$APP_DIR" fetch origin main
 git -C "$APP_DIR" reset --hard origin/main
 
 cd "$APP_DIR"
+chmod +x scripts/*.sh 2>/dev/null || true
+cat > /usr/local/bin/homesphere <<'EOF'
+#!/usr/bin/env bash
+exec bash /opt/homesphere/scripts/manage.sh "$@"
+EOF
+chmod 755 /usr/local/bin/homesphere
 
 say "更新 HomeSphere 镜像"
 docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
