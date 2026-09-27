@@ -26,6 +26,7 @@ export function Header() {
             <HeaderLink href="/" active={pathname === '/'}>发现</HeaderLink>
             <HeaderLink href="/library" active={pathname.startsWith('/library')}>片库</HeaderLink>
             <HeaderLink href="/live" active={pathname === '/live'}>直播</HeaderLink>
+            <HeaderLink href="/setup" active={pathname === '/setup'}>检查</HeaderLink>
             <ThemeToggle />
             <button className="p-2 rounded-md text-muted hover:text-content hover:bg-hover" onClick={() => setSettingsOpen(true)} aria-label="设置">
               <Icon name="gear" />
