@@ -20,6 +20,22 @@ export function isPasswordConfigured(): boolean {
   return getPassword().length > 0;
 }
 
+/**
+ * 登录限流使用的客户端标识。
+ * Cloudflare Tunnel 场景优先采用 Cloudflare 注入的真实客户端 IP；
+ * 本机/调试场景再回退到常见反向代理头。
+ */
+export function clientIpFromHeaders(headers: Headers): string {
+  const cf = headers.get('cf-connecting-ip')?.trim();
+  if (cf) return cf;
+
+  const xff = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  if (xff) return xff;
+
+  const real = headers.get('x-real-ip')?.trim();
+  return real || 'unknown';
+}
+
 function getSecret(): string {
   if (process.env.PROXY_SECRET) return process.env.PROXY_SECRET;
   return crypto.createHash('sha256').update(getPassword() + ':homesphere::session-salt').digest('hex');
