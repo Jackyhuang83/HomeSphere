@@ -52,9 +52,9 @@ export const OFFICIAL_NEWS_CHANNELS: OfficialNewsChannel[] = [
     id: 'ftv-news',
     name: '民视新闻',
     region: '台湾',
-    officialUrl: 'https://www.ftvnews.com.tw/',
+    officialUrl: 'https://www.ftvnews.com.tw/live/live-video/1/4gtv-4gtv038',
     provider: '民视新闻网',
-    note: '官方新闻网站直播入口',
+    note: '民视新闻 24 小时官方直播',
   },
   {
     id: 'set-news',
