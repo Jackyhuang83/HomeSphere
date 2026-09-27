@@ -16,11 +16,8 @@ git -C "$APP_DIR" reset --hard origin/main
 
 cd "$APP_DIR"
 
-say "更新 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge
-
-say "重新构建 HomeSphere"
-docker compose "${COMPOSE_FILES[@]}" build homesphere
+say "更新 HomeSphere 与 Media Bridge 镜像"
+docker compose "${COMPOSE_FILES[@]}" pull homesphere media-bridge
 
 say "重启服务"
 docker compose "${COMPOSE_FILES[@]}" up -d
@@ -29,7 +26,7 @@ if systemctl list-unit-files homesphere-cloudflared.service >/dev/null 2>&1; the
   systemctl restart homesphere-cloudflared.service >/dev/null 2>&1 || true
 fi
 
-docker builder prune -f >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1 || true
 
 say "更新完成"
 docker compose "${COMPOSE_FILES[@]}" ps
