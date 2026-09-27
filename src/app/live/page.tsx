@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Header } from '@/components/header';
+import { OfficialNewsChannels } from '@/components/official-news-channels';
 // 播放器（artplayer + hls.js）按需加载：拆出独立 chunk，不占首屏 First Load JS
 import dynamic from 'next/dynamic';
 const LivePlayer = dynamic(() => import('@/components/live-player').then((m) => m.LivePlayer), {
@@ -214,6 +215,7 @@ function LiveContent() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4">
+        <OfficialNewsChannels />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
           {/* 主栏：播放器 + 信息条 + 节目单 */}
           <div className="min-w-0">
@@ -232,7 +234,7 @@ function LiveContent() {
                     {sources.length === 0
                       ? liveEnvSources.length + liveSubscriptions.length > 0
                         ? '所有直播源均已停用，请在设置中勾选启用'
-                        : '请先在设置中添加直播源（M3U 订阅）'
+                        : '上方可直接打开官方新闻直播；这里用于你的自定义 M3U 订阅'
                       : playlistsQuery.isLoading
                         ? '频道列表加载中...'
                         : '从右侧选择一个频道开始观看'}
@@ -424,7 +426,7 @@ function LiveContent() {
                   {sources.length === 0
                     ? liveEnvSources.length + liveSubscriptions.length > 0
                       ? '所有直播源均已停用，请在设置中勾选启用'
-                      : '暂无直播源，请在设置 → 直播源中添加'
+                      : '暂无自定义 M3U；上方官方新闻直播可直接使用'
                     : `${failedCount > 0 ? `${failedCount} 个订阅拉取失败 · ` : ''}共 ${sources.length} 个已启用源`}
                 </p>
               )}
