@@ -25,10 +25,6 @@ docker compose "${COMPOSE_FILES[@]}" build homesphere
 say "重启服务"
 docker compose "${COMPOSE_FILES[@]}" up -d
 
-if systemctl list-unit-files homesphere-cloudflared.service >/dev/null 2>&1; then
-  systemctl restart homesphere-cloudflared >/dev/null 2>&1 || true
-fi
-
 docker builder prune -f >/dev/null 2>&1 || true
 
 say "更新完成"
