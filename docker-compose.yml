@@ -1,6 +1,6 @@
 services:
   homesphere:
-    image: ${HOMESPHERE_IMAGE:-ghcr.io/jackyhuang83/homesphere:latest}
+    image: ${HOMESPHERE_IMAGE:-ghcr.io/jackyhuang83/homesphere:edge}
     container_name: homesphere
     restart: unless-stopped
     ports:
