@@ -48,11 +48,8 @@ HomeSphere 是一个面向**本人 / 家人 / 少量朋友**的私人家庭影�
 
 播放时 HomeSphere 在服务器内部调用 Bridge，只取它返回的最终 CDN `Location`，然后把该 CDN URL 302 给客户端。Bridge 的管理/解析端口无需暴露互联网。
 
-详细接口：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)  
-Bridge 选择记录：[`docs/BRIDGE_OPTIONS.md`](docs/BRIDGE_OPTIONS.md)  
-Bridge 验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)  
-CloudDrive2 探针：[`docs/CD2_PROBE.md`](docs/CD2_PROBE.md)  \nCloudDrive2 部署验证：[`docs/CD2_DEPLOYMENT.md`](docs/CD2_DEPLOYMENT.md)
-
+详细接口：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)
+Bridge 验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)
 ---
 
 ## 播放链路
@@ -118,7 +115,6 @@ iPhone ───────────────────► 115 CDN
 
 下一阶段：
 
-- 使用内置 CD2 探针验证 115open 直链的 Safari 兼容性
 - 完成一个 Bridge 的真实端到端验证
 - 推荐榜单 → “搜我的片库”
 - 更完整播放器与字幕
@@ -261,42 +257,6 @@ HOMESPHERE_STRM_PLAYBACK_MODE=direct
 
 ---
 
-## CloudDrive2 兼容性探针
-
-CloudDrive2 是目前优先验证的115open底层，但 HomeSphere **不会因为它能返回 directUrl 就直接假定浏览器可播放**。CD2 的官方 gRPC 同时会返回推荐 User-Agent 与额外 Header；普通浏览器的302跳转无法任意添加这些 Header。
-
-因此 HomeSphere 提供一个只读诊断页：
-
-```text
-/library/cd2
-```
-
-服务器环境变量：
-
-```env
-HOMESPHERE_CD2_ENDPOINT=http://host.docker.internal:19798
-HOMESPHERE_CD2_TOKEN=限目录只读API令牌
-HOMESPHERE_CD2_PROBE_PATH=/你的CD2媒体根/测试文件.mp4
-```
-
-探针调用 CloudDrive2 官方 `GetDownloadUrlPath(get_direct_url=true)`，浏览器只会看到：
-
-- 是否返回 directUrl；
-- 临时直链的主机名；
-- 是否要求特定 User-Agent；
-- 额外 Header 的**名称**；
-- 是否具备浏览器302候选条件。
-
-不会返回：
-
-- CD2 Token；
-- 完整临时直链；
-- Header 值。
-
-只有当“无额外 Header + UA 与当前浏览器一致 + 目标为公网 HTTP(S)”时，页面才开放一次 iPhone/Safari 的真实302测试。
-
-详见 `docs/CD2_PROBE.md`。
-
 ---
 
 ## TMDB
@@ -368,10 +328,6 @@ HOMESPHERE_115_MEDIA_DIRS=["/电影","/电视剧"]
 | `HOMESPHERE_STRM_ALLOWED_HOSTS` | - | resolve 模式允许的 Bridge 主机 |
 | `HOMESPHERE_BRIDGE_TIMEOUT_MS` | 12000 | Bridge 解析超时 |
 | `HOMESPHERE_BRIDGE_MAX_REDIRECTS` | 3 | 内部跳转上限 |
-| `HOMESPHERE_CD2_ENDPOINT` | - | 可选 CD2 gRPC endpoint |
-| `HOMESPHERE_CD2_TOKEN` | - | 限目录、只读 CD2 API Token |
-| `HOMESPHERE_CD2_PROBE_PATH` | - | CD2 直链兼容性测试文件 |
-| `HOMESPHERE_CD2_TIMEOUT_MS` | 8000 | CD2 探针超时 |
 | `HOMESPHERE_DATA_DIR` | Docker `/data` | SQLite |
 | `TMDB_API_TOKEN` | - | TMDB Read Access Token |
 | `TMDB_LANGUAGE` | `zh-CN` | TMDB 返回语言 |
