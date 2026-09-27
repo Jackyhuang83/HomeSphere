@@ -1,0 +1,17 @@
+services:
+  homesphere:
+    depends_on:
+      - media-bridge
+
+  media-bridge:
+    image: qicfan/115strm:latest
+    container_name: media-bridge
+    restart: unless-stopped
+    # 管理页面只监听 VPS 本机；通过 SSH 隧道访问，不直接暴露公网。
+    ports:
+      - "127.0.0.1:12333:12333"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./bridge-config:/app/config
+      - ./media:/media
