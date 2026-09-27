@@ -93,7 +93,15 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 
 可以查看当前密码、重新生成随机密码或设置自定义密码。
 
-以后更新：
+以后 SSH 登录 VPS，直接运行：
+
+```bash
+homesphere
+```
+
+进入统一管理界面，可查看状态、更新、重启、管理家庭密码、Cloudflare Tunnel、日志和系统资源。
+
+单独执行更新脚本仍然可用：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/update.sh)
