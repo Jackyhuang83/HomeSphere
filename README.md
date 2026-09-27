@@ -51,7 +51,7 @@ HomeSphere 是一个面向**本人 / 家人 / 少量朋友**的私人家庭影�
 详细接口：[`docs/MEDIA_BRIDGE_CONTRACT.md`](docs/MEDIA_BRIDGE_CONTRACT.md)  
 Bridge 选择记录：[`docs/BRIDGE_OPTIONS.md`](docs/BRIDGE_OPTIONS.md)  
 Bridge 验收标准：[`docs/BRIDGE_VALIDATION.md`](docs/BRIDGE_VALIDATION.md)  
-CloudDrive2 探针：[`docs/CD2_PROBE.md`](docs/CD2_PROBE.md)
+CloudDrive2 探针：[`docs/CD2_PROBE.md`](docs/CD2_PROBE.md)  \nCloudDrive2 部署验证：[`docs/CD2_DEPLOYMENT.md`](docs/CD2_DEPLOYMENT.md)
 
 ---
 
@@ -274,7 +274,7 @@ CloudDrive2 是目前优先验证的115open底层，但 HomeSphere **不会因�
 服务器环境变量：
 
 ```env
-HOMESPHERE_CD2_ENDPOINT=http://clouddrive:19798
+HOMESPHERE_CD2_ENDPOINT=http://host.docker.internal:19798
 HOMESPHERE_CD2_TOKEN=限目录只读API令牌
 HOMESPHERE_CD2_PROBE_PATH=/你的CD2媒体根/测试文件.mp4
 ```
@@ -375,7 +375,7 @@ HOMESPHERE_115_MEDIA_DIRS=["/电影","/电视剧"]
 | `HOMESPHERE_DATA_DIR` | Docker `/data` | SQLite |
 | `TMDB_API_TOKEN` | - | TMDB Read Access Token |
 | `TMDB_LANGUAGE` | `zh-CN` | TMDB 返回语言 |
-| `DEFAULT_LIVE_SOURCES` | - | IPTV M3U / EPG |
+| `SIXTYS_API_BASE` | 公共实例 | 可选自建 60s 热榜 API |\n| `DEFAULT_LIVE_SOURCES` | - | IPTV M3U / EPG |
 | `LIVE_ALLOW_PRIVATE` | 关闭 | 允许内网 IPTV |
 
 ---

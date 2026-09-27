@@ -23,6 +23,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+        env:
+          PASSWORD: test-password
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
