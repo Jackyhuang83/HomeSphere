@@ -21,18 +21,7 @@ cat <<'EOF'
 
 HomeSphere 将使用 Cloudflare Tunnel 提供公网 HTTPS。
 
-安全规则与 MiniProbe 对齐：
-- Tunnel Token 只保存在 VPS 本机；
-- 保存位置：/etc/homesphere/cloudflared.env
-- 目录权限：0750
-- Token 文件权限：0600
-- 只有 root 可以读取；
-- Token 不写入 HomeSphere .env；
-- 不写入 Docker volume；
-- 不上传 GitHub；
-- 不显示在网页中。
-
-这样 VPS 重启后，systemd 可以自动恢复 Tunnel，不需要重新输入 Token。
+Cloudflare Tunnel 将由脚本自动配置，并支持 VPS 重启后自动恢复。
 
 VPS 不需要开放 80 / 443 / 8080 / 12333。
 
@@ -181,16 +170,7 @@ https://$DOMAIN
 当前网络边界：
 Cloudflare -> Tunnel -> 127.0.0.1:8080 -> HomeSphere
 
-Tunnel Token 只保存在：
-$CF_ENV_FILE
-
-安全属性：
-- root-only
-- chmod 600
-- 不进 HomeSphere .env
-- 不进 Docker
-- 不进 GitHub
-- VPS 重启后 systemd 自动恢复 Tunnel
+Cloudflare Tunnel 已配置完成，并支持 VPS 重启后自动恢复。
 
 VPS 不需要开放：
 - TCP 80
