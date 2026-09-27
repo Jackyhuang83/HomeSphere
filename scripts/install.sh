@@ -65,15 +65,15 @@ chmod 700 bridge-config
 
 if [ ! -f .env ]; then
   say "设置家庭登录密码"
-  RANDOM_PASSWORD="$(openssl rand -hex 10)"
-  echo "系统已自动生成 20 位随机密码："
+  RANDOM_PASSWORD="$(openssl rand -hex 16)"
+  echo "系统已自动生成安全随机密码："
   echo
   echo "    $RANDOM_PASSWORD"
   echo
   echo "直接回车即可使用这个随机密码；如果想用自己的密码，也可以现在输入。"
 
   while true; do
-    read -r -s -p "自定义密码（至少 8 位；不修改就直接回车）： " CUSTOM_PASSWORD
+    read -r -s -p "自定义密码（不修改就直接回车）： " CUSTOM_PASSWORD
     echo
 
     if [ -z "$CUSTOM_PASSWORD" ]; then
@@ -81,8 +81,8 @@ if [ ! -f .env ]; then
       break
     fi
 
-    [ "${#CUSTOM_PASSWORD}" -ge 8 ] || { echo "密码至少 8 位，请重新输入。"; continue; }
-    [[ "$CUSTOM_PASSWORD" =~ ^[A-Za-z0-9@._%+=:!,-]+$ ]] || { echo "密码只支持字母、数字和 @ . _ % + = : ! , -"; continue; }
+    [ "${#CUSTOM_PASSWORD}" -ge 12 ] || { echo "这个密码强度不足，请重新设置。"; continue; }
+    [[ "$CUSTOM_PASSWORD" =~ ^[A-Za-z0-9@._%+=:!,-]+$ ]] || { echo "密码格式不符合要求，请重新设置。"; continue; }
 
     read -r -s -p "请再输入一次自定义密码： " PASSWORD2
     echo
@@ -165,8 +165,7 @@ cat <<'EOF'
    然后在 SSH 中运行：
    bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
 
-Media Bridge 默认账号通常为 admin / admin123。
-首次登录后请立即修改管理密码，再完成 115 开放平台授权。
+请按 Media Bridge 页面提示完成首次设置和 115 授权。
 
 HomeSphere 家庭密码忘记后，不需要找配置文件。
 SSH 登录 VPS 后运行：
