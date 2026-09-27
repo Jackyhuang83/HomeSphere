@@ -375,7 +375,7 @@ HOMESPHERE_115_MEDIA_DIRS=["/电影","/电视剧"]
 | `HOMESPHERE_DATA_DIR` | Docker `/data` | SQLite |
 | `TMDB_API_TOKEN` | - | TMDB Read Access Token |
 | `TMDB_LANGUAGE` | `zh-CN` | TMDB 返回语言 |
-| `DEFAULT_LIVE_SOURCES` | - | IPTV M3U / EPG |
+| `SIXTYS_API_BASE` | 公共实例 | 可选自建 60s 热榜 API |\n| `DEFAULT_LIVE_SOURCES` | - | IPTV M3U / EPG |
 | `LIVE_ALLOW_PRIVATE` | 关闭 | 允许内网 IPTV |
 
 ---
