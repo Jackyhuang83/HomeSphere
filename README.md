@@ -101,11 +101,19 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/update.sh)
 ```
 
-配置公网 HTTPS：
+配置公网 HTTPS（Cloudflare Tunnel）：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
 ```
+
+公网访问统一通过 Cloudflare Tunnel：
+
+```text
+Cloudflare HTTPS -> Tunnel -> 127.0.0.1:8080 -> HomeSphere
+```
+
+VPS 不需要开放 80 / 443 / 8080 / 12333。
 
 默认情况下：
 
