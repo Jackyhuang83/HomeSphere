@@ -359,7 +359,46 @@ TCP 443
 
 ---
 
-## 9. 以后更新：仍然只执行一条命令
+## 9. 忘记家庭密码怎么办
+
+不需要找配置文件，也不需要重新安装 HomeSphere。
+
+SSH 登录 VPS 后执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
+```
+
+会看到：
+
+```text
+HomeSphere 家庭密码管理
+
+1. 查看当前密码
+2. 重新生成 20 位随机密码
+3. 设置自己的密码
+0. 退出
+```
+
+选择 **1** 可以直接查看当前家庭密码。
+
+选择 **2** 会：
+
+- 自动生成新的 20 位随机密码；
+- 写入 HomeSphere 配置；
+- 自动重启 HomeSphere；
+- 显示新密码；
+- 让之前已经登录的设备全部退出登录。
+
+选择 **3** 可以在 SSH 中设置自己的密码，不需要编辑文件。
+
+因此密码忘记以后，只要还能 SSH 登录 VPS，就可以恢复访问。
+
+> HomeSphere 家庭密码会保存在 VPS 本地的受限配置文件中，供服务启动和 SSH 密码管理使用。不要把密码管理命令的输出截图公开分享。
+
+---
+
+## 10. 以后更新：仍然只执行一条命令
 
 SSH 登录 VPS 后执行：
 
@@ -380,7 +419,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 
 ---
 
-## 10. 查看运行状态
+## 11. 查看运行状态
 
 任何时候都可以在 SSH 中执行：
 
@@ -403,7 +442,7 @@ homesphere-caddy
 
 ---
 
-## 11. 出问题时怎么做
+## 12. 出问题时怎么做
 
 ### HomeSphere 打不开
 
@@ -453,7 +492,7 @@ docker system df
 
 ---
 
-## 12. 这台 10GB VPS 不做什么
+## 13. 这台 10GB VPS 不做什么
 
 当前 VPS 只有：
 
@@ -488,7 +527,7 @@ VPS 中只保存：
 
 ---
 
-## 13. 你真正需要记住的命令
+## 14. 你真正需要记住的命令
 
 第一次安装：
 
@@ -500,6 +539,12 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
+```
+
+查看 / 重置家庭密码：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
 ```
 
 以后更新：
