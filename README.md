@@ -17,7 +17,7 @@ HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋
  │
  ▼
 Media Bridge
- ├─ 持有115授权
+ ├─ 管理 115 授权
  ├─ 生成 STRM
  └─ 播放时返回 3xx
  │
@@ -41,16 +41,14 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 
 ## 核心原则
 
-- 115 凭据只保存在 Media Bridge；
-- HomeSphere 不保存 115 Cookie、Token 或账号信息；
-- HomeSphere 不实现 Cloud Provider；
+- 115 授权由 Media Bridge 负责；
+- HomeSphere 只消费 STRM，不直接接入网盘 API；
 - STRM 目录只读挂载给 HomeSphere；
 - 播放时才解析临时直链；
-- Bridge 必须返回 3xx；
 - HomeSphere 不代理视频内容；
 - HomeSphere 与 Bridge 默认只监听 VPS 本机；
-- 对外使用 HomeSphere 时通过 HTTPS；
-- 115 调用采用保守限速、缓存和熔断策略。
+- 对外访问统一通过 HTTPS；
+- 对上游调用采用保守限速、缓存和熔断策略。
 
 这些措施用于降低异常调用和账号风控风险，但不能保证第三方平台账号绝不会受到限制。
 
@@ -85,7 +83,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 
 不需要手动编辑 `.env`、Docker Compose 或上传配置文件。
 
-首次安装会自动生成一个 **20 位随机家庭密码**；也可以在 SSH 中改成自己的密码。
+首次安装会自动生成安全的家庭访问密码，也可以在 SSH 中改成自己的密码。
 
 忘记密码时无需找配置文件，直接运行：
 
