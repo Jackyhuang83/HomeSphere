@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
-import { SESSION_COOKIE, checkPassword, checkRateLimit, clearRateLimit, sessionFromCookieHeader, signSession, verifySession } from './auth';
+import { SESSION_COOKIE, checkPassword, checkRateLimit, clearRateLimit, sessionFromCookieHeader, signSession, verifySession, clientIpFromHeaders } from './auth';
 
 /**
  * 会话鉴权单测：HMAC 签名/校验、过期、防篡改、密码恒定时间比较、登录限流。
@@ -93,6 +93,23 @@ describe('sessionFromCookieHeader', () => {
     expect(sessionFromCookieHeader('')).toBe(false);
     expect(sessionFromCookieHeader(`other=1`)).toBe(false);
     expect(sessionFromCookieHeader(`${SESSION_COOKIE}=${token}x`)).toBe(false);
+  });
+});
+
+describe('clientIpFromHeaders', () => {
+  it('Cloudflare 真实客户端 IP 优先于普通代理头', () => {
+    const headers = new Headers({
+      'cf-connecting-ip': '203.0.113.10',
+      'x-forwarded-for': '198.51.100.20, 127.0.0.1',
+      'x-real-ip': '192.0.2.30',
+    });
+    expect(clientIpFromHeaders(headers)).toBe('203.0.113.10');
+  });
+
+  it('无 Cloudflare 头时回退到常见代理头', () => {
+    expect(clientIpFromHeaders(new Headers({ 'x-forwarded-for': '198.51.100.20, 127.0.0.1' }))).toBe('198.51.100.20');
+    expect(clientIpFromHeaders(new Headers({ 'x-real-ip': '192.0.2.30' }))).toBe('192.0.2.30');
+    expect(clientIpFromHeaders(new Headers())).toBe('unknown');
   });
 });
 
