@@ -172,7 +172,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 EOF
 
 if [ -f .env ]; then
-  CURRENT_PASSWORD="$(sed -n "s/^PASSWORD=['\"]\{0,1\}\(.*\)['\"]\{0,1\}$/\1/p" .env | head -n1)"
+  CURRENT_PASSWORD="$(grep '^PASSWORD=' .env | head -n1 || true)"
+  CURRENT_PASSWORD="${CURRENT_PASSWORD#PASSWORD=}"
+  if [[ "$CURRENT_PASSWORD" == \'*\' ]] || [[ "$CURRENT_PASSWORD" == \"*\" ]]; then
+    CURRENT_PASSWORD="${CURRENT_PASSWORD:1:${#CURRENT_PASSWORD}-2}"
+  fi
   if [ -n "$CURRENT_PASSWORD" ]; then
     echo
     echo "HomeSphere 当前家庭访问密码："
