@@ -79,7 +79,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
 ```
 
-脚本会自动安装 Docker、创建目录、生成配置、准备约 1GB swap、启动 HomeSphere 与 Media Bridge。
+脚本会自动安装 Docker、创建目录、生成配置、拉取预构建镜像并启动 HomeSphere 与 Media Bridge。
 
 不需要手动编辑 `.env`、Docker Compose 或上传配置文件。
 
