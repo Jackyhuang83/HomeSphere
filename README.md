@@ -85,6 +85,16 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 
 不需要手动编辑 `.env`、Docker Compose 或上传配置文件。
 
+首次安装会自动生成一个 **20 位随机家庭密码**；也可以在 SSH 中改成自己的密码。
+
+忘记密码时无需找配置文件，直接运行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
+```
+
+可以查看当前密码、重新生成随机密码或设置自定义密码。
+
 以后更新：
 
 ```bash
