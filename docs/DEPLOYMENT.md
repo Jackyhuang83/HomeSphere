@@ -1,339 +1,529 @@
-# HomeSphere 部署指南
+# HomeSphere 部署指南（纯 SSH 操作版）
 
-本文只描述当前推荐部署：
-
-```text
-115 + 一台 VPS + HomeSphere + 轻量 Media Bridge
-```
-
-不需要 NAS、Mac mini、CloudDrive2、Emby、Jellyfin 或 Plex。
-
-## 1. 目标机器
-
-当前目标：
+这份指南按当前实际环境编写：
 
 ```text
-1 vCPU
-1 GB RAM
-50 GB SSD
-10 Mbps
-115 会员 / 约 50 TB
+VPS：1 vCPU / 1 GB RAM / 10 GB SSD / 10 Mbps
+115：1 个会员账号 / 约 50 TB 媒体
+终端：iPhone / iPad 为主
 ```
 
-这个配置适合 HomeSphere 与轻量 Bridge 的控制面工作。
+目标是：**不要求你编辑配置文件、不要求你找目录上传文件、不要求你懂 Docker Compose。**
 
-**不适合：**
+服务器部署只需要在 SSH 中复制命令并按提示操作。
 
-- 视频转码；
-- 视频中继；
-- 把电影下载到 VPS；
-- 把 VPS 当媒体存储。
+> 说明：115 授权和 Media Bridge 的首次设置是上游程序提供的网页界面，因此这一步需要打开浏览器；但仍然不需要你编辑任何服务器文件。
 
-正常播放时，视频应由最终 CDN 直接传给 iPhone / iPad。
+---
 
-## 2. 目录
+## 1. 最终架构
 
-在 VPS 上进入 HomeSphere 项目目录后：
+```text
+115
+ │
+ ▼
+Media Bridge
+ ├─ 持有 115 授权
+ ├─ 生成 STRM
+ └─ 播放时返回 3xx
+ │
+ ▼
+HomeSphere
+ ├─ SQLite
+ ├─ TMDB
+ ├─ 海报墙
+ └─ IPTV
+ │
+ ▼
+iPhone / iPad
+
+真正视频流：
+iPhone / iPad ─────────────► 115 CDN
+```
+
+VPS 只做网页、索引、播放解析和 302 跳转。
+
+**视频内容不经过 VPS。**
+
+---
+
+## 2. 第一次安装：只执行这一条命令
+
+先 SSH 登录 VPS。
+
+如果当前不是 root，先执行：
 
 ```bash
-mkdir -p bridge-config media
+sudo -i
+```
+
+然后执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
+```
+
+安装脚本会自动完成：
+
+- 安装 Docker；
+- 安装基础工具；
+- 检查并创建约 1GB swap；
+- 下载 HomeSphere；
+- 创建所有目录；
+- 自动生成 HomeSphere 配置；
+- 拉取 Media Bridge；
+- 构建并启动 HomeSphere；
+- 清理 Docker 构建缓存。
+
+你不需要执行：
+
+```text
+nano
+vim
+vi
 cp .env.example .env
+上传 .env
+手动创建 docker-compose.yml
+手动找目录
 ```
 
-用途：
+### 安装过程中只会问你两个东西
+
+第一项：
 
 ```text
-bridge-config/   Bridge 配置与本地数据
-media/           Bridge 生成的 STRM
-/data            HomeSphere SQLite（Docker volume）
+HomeSphere 家庭访问密码
 ```
 
-原始视频不保存在这些目录。
+建议设置至少 8 位。
 
-## 3. HomeSphere 基础配置
+第二项：
 
-编辑 `.env`，至少设置：
-
-```env
-PASSWORD=你的家庭访问密码
-
-HOMESPHERE_STRM_PATH=./media
-HOMESPHERE_STRM_ALLOWED_HOSTS=media-bridge
+```text
+TMDB API Read Access Token
 ```
 
-推荐保持保守默认值：
+如果现在没有，**直接回车即可**。
 
-```env
-HOMESPHERE_BRIDGE_TIMEOUT_MS=12000
-HOMESPHERE_BRIDGE_MAX_REDIRECTS=3
-HOMESPHERE_BRIDGE_MIN_INTERVAL_MS=1000
-HOMESPHERE_BRIDGE_CACHE_TTL_MS=60000
-HOMESPHERE_BRIDGE_CIRCUIT_MS=60000
+HomeSphere 仍然可以运行，只是暂时不会自动补齐 TMDB 海报和简介。
+
+---
+
+## 3. 安装完成后的安全状态
+
+默认情况下：
+
+```text
+HomeSphere     127.0.0.1:8080
+Media Bridge   127.0.0.1:12333
 ```
 
-可选 TMDB：
+两个端口都只监听 VPS 本机。
 
-```env
-TMDB_API_TOKEN=你的_API_Read_Access_Token
-TMDB_LANGUAGE=zh-CN
-```
+也就是说，安装刚完成时它们**不会直接暴露在公网**。
 
-没有 TMDB 也可以使用片库，只是不会自动补海报和简介。
+这是故意这样设计的。
 
-## 4. 启动
+---
+
+## 4. 第一次进入 HomeSphere 和 Media Bridge
+
+在你自己的电脑终端执行：
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.bridge.yml \
-  up -d
+ssh -L 8080:127.0.0.1:8080 -L 12333:127.0.0.1:12333 root@你的VPS_IP
 ```
 
-检查：
+这一条仍然只是 SSH，不需要编辑文件。
 
-```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.bridge.yml \
-  ps
-```
+保持这个 SSH 窗口不要关闭。
+
+然后浏览器打开：
 
 HomeSphere：
 
 ```text
-http://服务器IP:8080
+http://127.0.0.1:8080
 ```
 
-Bridge 管理端口默认只绑定 VPS 本机：
-
-```text
-127.0.0.1:12333
-```
-
-不要把 12333 直接开放公网。
-
-## 5. 第一次进入 Bridge
-
-从自己的电脑建立 SSH 隧道：
-
-```bash
-ssh -L 12333:127.0.0.1:12333 root@你的VPS_IP
-```
-
-浏览器打开：
+Media Bridge：
 
 ```text
 http://127.0.0.1:12333
 ```
 
-当前部署模板使用轻量 `qicfan/115strm` Bridge。
+---
 
-首次进入后：
+## 5. 第一次设置 Media Bridge
 
-1. 立即修改默认管理密码；
-2. 在 Bridge 内完成115授权；
-3. 只选择真正存影视的目录；
-4. 不扫描115整个根目录。
+当前 HomeSphere 使用：
 
-例如：
+```text
+qicfan/115strm
+```
+
+默认管理账号通常为：
+
+```text
+用户名：admin
+密码：admin123
+```
+
+第一次登录以后：
+
+1. **立即修改默认管理密码**；
+2. 完成 115 开放平台授权；
+3. 只添加真正存放电影/电视剧的 115 目录；
+4. STRM 本地输出目录使用：
+
+```text
+/media
+```
+
+例如 115 中真正的影视目录可能是：
 
 ```text
 /电影
 /电视剧
 ```
 
-115 凭据不要写进 HomeSphere 的 `.env`，也不要提交到 GitHub。
+不要直接扫描整个 115 根目录。
 
-## 6. Bridge 保守设置
-
-HomeSphere 只需要 Bridge 做三件事：
-
-1. 读取115媒体目录；
-2. 生成 / 更新 STRM；
-3. 点击播放时解析临时直链并返回 3xx。
-
-不需要的功能保持关闭：
-
-- 视频代理 / relay / 中继；
-- 自动上传元数据到115；
-- 自动移动115文件；
-- 自动重命名115文件；
-- 自动删除115文件；
-- 与 HomeSphere 无关的下载、转存和自动化任务。
-
-### 同步频率
+### 推荐同步策略
 
 第一次：
 
-- 手动执行一次全量同步；
-- 不并行启动多个全量任务。
+```text
+手动全量同步 1 次
+```
 
 日常：
 
-- 推荐每 **6 小时**同步一次；
-- 新增影片后可以手动同步；
-- 不需要高频轮询。
-
-Bridge 自身如果出现请求限制，应停下来等待，不要通过提高并发或密集重试规避平台限制。
-
-## 7. HomeSphere 建立片库
-
-登录 HomeSphere 后打开：
-
 ```text
-/setup
+每 6 小时同步 1 次
 ```
 
-页面会检查：
+不要设置成高频同步。
 
-1. Bridge 是否配置；
-2. STRM 目录是否可读；
-3. 本地片库是否已有索引；
-4. TMDB 是否配置（可选）。
+### 不需要开启的功能
+
+HomeSphere 只需要 Media Bridge：
+
+- 读取 115；
+- 生成 STRM；
+- 播放时解析临时直链；
+- 返回 3xx。
+
+因此以下功能保持关闭：
+
+- 视频代理 / relay / 中继；
+- 自动上传元数据到 115；
+- 自动移动 115 文件；
+- 自动重命名 115 文件；
+- 自动删除 115 文件；
+- 与 HomeSphere 无关的下载或转存任务。
+
+---
+
+## 6. HomeSphere 建立片库
+
+Media Bridge 已经生成 STRM 后，浏览器打开：
+
+```text
+http://127.0.0.1:8080/setup
+```
+
+登录以后按页面检查。
 
 然后进入：
 
 ```text
-片库 → 同步STRM
+片库 → 同步 STRM
 ```
 
-HomeSphere 会把 STRM 建成本地 SQLite 索引。
+HomeSphere 会自动把 STRM 建立成本地 SQLite 片库。
 
-普通浏览、搜索和 TMDB 展示都不会访问115。
+普通浏览、搜索、海报墙展示不会反复访问 115。
 
-## 8. 播放链路测试
+---
 
-片库页点击：
+## 7. 测试播放
 
-```text
-测试播放链路
-```
+点击一部影片播放。
 
-正确链路：
+正确的数据路径应该是：
 
 ```text
-iPhone
-  │
-  ▼
+iPhone / iPad
+    │
+    ▼
 HomeSphere
-  │ 仅请求解析
-  ▼
+    │
+    ▼
 Media Bridge
-  │ 3xx
-  ▼
+    │
+    └─ 返回 3xx
+          │
+          ▼
 HomeSphere 返回 302
-  │
-  ▼
-iPhone ─────────────► 115 CDN
+          │
+          ▼
+iPhone / iPad ─────────► 115 CDN
 ```
 
-至少实测：
+建议测试：
 
-- Safari / PWA 登录；
 - 电影正常起播；
-- 拖动进度；
-- 暂停后继续；
-- 连续播放不同文件；
-- 剧集切换至少两集。
+- 拖动进度条；
+- 暂停再继续；
+- 连续切换几个文件；
+- 电视剧连续切换至少两集。
 
-### 最重要的带宽判断
+### 判断有没有错误走 VPS 流量
 
-播放电影时，如果 VPS 的 10Mbps 长时间被持续占满，说明播放路径配置错误，通常是误开了代理 / relay。
+播放视频时，在 SSH 中执行：
 
-正确情况下，VPS 只承担很小的网页、API 和 302 控制流量。
+```bash
+docker stats --no-stream
+```
 
-## 9. 风控保护
+正常情况下，HomeSphere 不应该持续承担大视频流量。
 
-HomeSphere 对 Bridge 额外执行：
+如果 VPS 的 10Mbps 长时间跑满，说明播放链路有问题，通常是误开了视频代理 / relay。
 
-- 解析请求全局串行；
-- 默认最小间隔 1 秒；
-- 相同 STRM + User-Agent 最终地址短缓存 60 秒；
-- 429 / 5xx 后熔断 60 秒；
-- 不做自动暴力重试；
-- 最终 CDN 地址执行 SSRF / 公网地址检查。
+---
 
-这些策略是为了减少重复和异常请求，不是规避第三方平台规则，也不能保证账号绝不会被限制。
+## 8. 准备给家人朋友使用：开启 HTTPS
 
-## 10. 1GB 内存建议
+不要直接把：
 
-1GB RAM 可以运行当前方案，但首次处理较大片库时建议增加约 1GB swap，避免瞬时内存压力直接触发 OOM。
+```text
+http://VPS_IP:8080
+```
 
-同时避免在这台 VPS 上运行：
+发给家人使用。
 
-- 转码；
-- 大型数据库；
+家庭登录密码必须通过 HTTPS 传输。
+
+先把你准备使用的域名解析到 VPS。
+
+然后 SSH 中运行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
+```
+
+脚本会询问：
+
+```text
+HomeSphere 域名
+```
+
+例如：
+
+```text
+media.example.com
+```
+
+然后自动完成：
+
+- HTTPS 入口；
+- TLS 证书；
+- 反向代理；
+- Secure Cookie；
+- Caddy 容器；
+- HomeSphere 重启。
+
+你仍然不需要编辑任何配置文件。
+
+完成后使用：
+
+```text
+https://你的域名
+```
+
+给家人或朋友访问。
+
+### 注意
+
+如果 VPS 服务商还有“安全组 / 云防火墙”，需要允许：
+
+```text
+TCP 80
+TCP 443
+```
+
+12333 不要开放公网。
+
+8080 也不需要开放公网。
+
+---
+
+## 9. 以后更新：仍然只执行一条命令
+
+SSH 登录 VPS 后执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/update.sh)
+```
+
+脚本会自动：
+
+- 更新 HomeSphere；
+- 更新 Media Bridge 镜像；
+- 重新构建；
+- 重启服务；
+- 保留已有密码、115 授权、SQLite 数据和 STRM；
+- 清理 Docker 构建缓存。
+
+不需要找 HomeSphere 安装目录。
+
+---
+
+## 10. 查看运行状态
+
+任何时候都可以在 SSH 中执行：
+
+```bash
+docker ps
+```
+
+正常情况下至少应该看到：
+
+```text
+homesphere
+media-bridge
+```
+
+启用 HTTPS 后还会看到：
+
+```text
+homesphere-caddy
+```
+
+---
+
+## 11. 出问题时怎么做
+
+### HomeSphere 打不开
+
+SSH 中执行：
+
+```bash
+docker logs --tail 100 homesphere
+```
+
+把完整输出发给我。
+
+### Media Bridge 有问题
+
+执行：
+
+```bash
+docker logs --tail 100 media-bridge
+```
+
+把完整输出发给我。
+
+### HTTPS 有问题
+
+执行：
+
+```bash
+docker logs --tail 100 homesphere-caddy
+```
+
+把完整输出发给我。
+
+### 看 VPS 磁盘
+
+执行：
+
+```bash
+df -h
+```
+
+### 看 Docker 占用
+
+执行：
+
+```bash
+docker system df
+```
+
+---
+
+## 12. 这台 10GB VPS 不做什么
+
+当前 VPS 只有：
+
+```text
+1C1G
+10GB SSD
+10Mbps
+```
+
+所以明确不做：
+
+- 保存电影原文件；
+- 视频转码；
+- 视频中继；
 - 视频下载缓存；
-- 不必要的媒体服务。
+- Emby；
+- Jellyfin；
+- Plex；
+- CloudDrive2；
+- NAS 挂载。
 
-## 11. 数据备份
+VPS 中只保存：
 
-建议备份：
+- HomeSphere 程序；
+- Docker 镜像；
+- SQLite；
+- Media Bridge 配置；
+- 少量 STRM；
+- 少量缓存。
 
-```text
-bridge-config/
-HomeSphere /data volume
-.env
-```
+安装脚本和更新脚本都会主动清理 Docker 构建缓存，尽量控制 10GB 磁盘占用。
 
-不需要备份：
+---
 
-```text
-media/*.strm
-```
+## 13. 你真正需要记住的命令
 
-STRM 可由 Bridge 重新生成。
-
-不要把任何账号凭据上传到公开 Git 仓库。
-
-## 12. 更新
-
-HomeSphere 更新前：
+第一次安装：
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.bridge.yml \
-  pull
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
 ```
 
-然后：
+配置 HTTPS：
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.bridge.yml \
-  up -d
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
 ```
 
-Bridge 长期稳定运行后，建议记录实际镜像 RepoDigest，并固定 digest，避免 `latest` 标签未来变化：
+以后更新：
 
 ```bash
-docker image inspect qicfan/115strm:latest --format '{{json .RepoDigests}}'
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/update.sh)
 ```
 
-## 13. 常见问题
+查看状态：
 
-### 片库是空的
+```bash
+docker ps
+```
 
-依次检查：
+排查 HomeSphere：
 
-1. Bridge 是否已经生成 STRM；
-2. VPS 的 `media/` 是否有 `.strm`；
-3. HomeSphere `/setup` 是否显示 STRM 可读；
-4. 是否点击过“同步STRM”。
+```bash
+docker logs --tail 100 homesphere
+```
 
-### 点击播放返回 Bridge 错误
+排查 Media Bridge：
 
-先停止连续点击。检查：
+```bash
+docker logs --tail 100 media-bridge
+```
 
-- Bridge 是否仍正常；
-- 是否出现 429 / 5xx；
-- HomeSphere 是否处于熔断期；
-- STRM 第一行是否仍指向正确 Bridge 地址。
-
-### 视频播放很慢
-
-先看 VPS 带宽。
-
-如果 VPS 带宽接近 10Mbps，优先检查是否启用了视频代理 / relay；不要通过提高 VPS 带宽掩盖错误链路。
+**不再要求手动编辑任何服务器配置文件。**
