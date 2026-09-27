@@ -71,9 +71,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 - 下载 HomeSphere；
 - 创建所有目录；
 - 自动生成 HomeSphere 配置；
-- 拉取 Media Bridge；
-- 构建并启动 HomeSphere；
-- 清理 Docker 构建缓存。
+- 拉取预构建的 HomeSphere 与 Media Bridge 镜像；
+- 启动 HomeSphere 与 Media Bridge；
+- 清理不再使用的旧镜像。
 
 你不需要执行：
 
@@ -442,8 +442,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 脚本会自动：
 
 - 更新 HomeSphere；
-- 更新 Media Bridge 镜像；
-- 重新构建；
+- 更新 HomeSphere 与 Media Bridge 镜像；
 - 重启服务；
 - 保留已有密码、115 授权、SQLite 数据和 STRM；
 - 清理 Docker 构建缓存。
@@ -560,7 +559,7 @@ VPS 中只保存：
 - 少量 STRM；
 - 少量缓存。
 
-安装脚本和更新脚本都会主动清理 Docker 构建缓存，尽量控制 10GB 磁盘占用。
+安装脚本和更新脚本都会主动清理不再使用的旧镜像，尽量控制 10GB 磁盘占用。
 
 ---
 
