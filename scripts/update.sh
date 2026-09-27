@@ -25,10 +25,8 @@ docker compose "${COMPOSE_FILES[@]}" build homesphere
 say "重启服务"
 docker compose "${COMPOSE_FILES[@]}" up -d
 
-if docker ps -a --format '{{.Names}}' | grep -qx homesphere-caddy; then
-  docker pull caddy:2-alpine >/dev/null
-  docker rm -f homesphere-caddy >/dev/null 2>&1 || true
-  docker run -d     --name homesphere-caddy     --restart unless-stopped     --network host     -v "$APP_DIR/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"     -v homesphere-caddy-data:/data     -v homesphere-caddy-config:/config     caddy:2-alpine >/dev/null
+if systemctl list-unit-files homesphere-cloudflared.service >/dev/null 2>&1; then
+  systemctl restart homesphere-cloudflared >/dev/null 2>&1 || true
 fi
 
 docker builder prune -f >/dev/null 2>&1 || true
