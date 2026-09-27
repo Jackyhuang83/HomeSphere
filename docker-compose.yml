@@ -1,6 +1,5 @@
 services:
   homesphere:
-    build: .
     image: ${HOMESPHERE_IMAGE:-ghcr.io/jackyhuang83/homesphere:latest}
     container_name: homesphere
     restart: unless-stopped
