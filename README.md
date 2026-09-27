@@ -2,10 +2,10 @@
 
 HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋友使用。
 
-当前目标环境很明确：
+当前目标环境：
 
 - 1 个 115 会员账号 / 约 50TB 媒体；
-- 1 台 1C1G / 50GB / 10Mbps VPS；
+- 1 台 1C1G / 10GB / 10Mbps VPS；
 - iPhone / iPad 为主要播放终端；
 - 不使用 Emby / Jellyfin / Plex；
 - 不在 VPS 上转码，也不让视频字节经过 VPS。
@@ -48,7 +48,8 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - 播放时才解析临时直链；
 - Bridge 必须返回 3xx；
 - HomeSphere 不代理视频内容；
-- Bridge 管理端口不公开到互联网；
+- HomeSphere 与 Bridge 默认只监听 VPS 本机；
+- 对外使用 HomeSphere 时通过 HTTPS；
 - 115 调用采用保守限速、缓存和熔断策略。
 
 这些措施用于降低异常调用和账号风控风险，但不能保证第三方平台账号绝不会受到限制。
@@ -74,31 +75,42 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 
 **[部署指南](docs/DEPLOYMENT.md)**
 
-最简启动方式：
+第一次安装只需要 SSH 中执行：
 
 ```bash
-cp .env.example .env
-mkdir -p bridge-config media
-
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.bridge.yml \
-  up -d
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
 ```
 
-HomeSphere 默认访问：
+脚本会自动安装 Docker、创建目录、生成配置、准备约 1GB swap、启动 HomeSphere 与 Media Bridge。
+
+不需要手动编辑 `.env`、Docker Compose 或上传配置文件。
+
+以后更新：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/update.sh)
+```
+
+配置公网 HTTPS：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
+```
+
+默认情况下：
 
 ```text
-http://服务器IP:8080
+HomeSphere     127.0.0.1:8080
+Media Bridge   127.0.0.1:12333
 ```
 
-生产环境建议使用 HTTPS 反向代理，只公开 HomeSphere。
+两者都不会直接裸露公网。
 
 ## 文档
 
 | 文档 | 用途 |
 |---|---|
-| [部署指南](docs/DEPLOYMENT.md) | 从空 VPS 到115授权、STRM同步、iPhone播放 |
+| [部署指南](docs/DEPLOYMENT.md) | 纯 SSH 部署、115授权、STRM同步、HTTPS、更新与排障 |
 | [架构说明](docs/ARCHITECTURE.md) | STRM / Bridge 边界、播放链路、安全策略 |
 | [第三方声明](THIRD_PARTY_NOTICES.md) | 上游项目与许可证 |
 
