@@ -43,7 +43,7 @@ function DoubanView() {
       <div className="flex flex-wrap gap-1.5 mb-4">
         {tags.map((t) => <button key={t} className={cn('px-2.5 py-1 rounded-full text-xs', t === tag ? 'bg-accent text-on-accent' : 'bg-chip text-muted hover:bg-hover')} onClick={() => setTag(t)}>{t}</button>)}
       </div>
-      <RecommendationGrid items={query.data?.items ?? []} loading={query.isLoading} error={query.isError} />
+      <RecommendationGrid items={query.data?.items ?? []} loading={query.isLoading} error={query.isError} source="douban" />
     </section>
   );
 }
@@ -59,7 +59,7 @@ function BangumiView() {
         <Chip active={weekday === 'all'} onClick={() => setWeekday('all')}>全部</Chip>
         {WEEKDAYS.map((name, i) => <Chip key={name} active={weekday === i + 1} onClick={() => setWeekday(i + 1)}>{name}</Chip>)}
       </div>
-      <RecommendationGrid items={items} loading={query.isLoading} error={query.isError} />
+      <RecommendationGrid items={items} loading={query.isLoading} error={query.isError} source="bangumi" />
     </section>
   );
 }
@@ -72,15 +72,15 @@ function HotListView() {
       <div className="flex flex-wrap gap-1.5 mb-4">
         {HOT_LISTS.map((l) => <Chip key={l.id} active={listId === l.id} onClick={() => setListId(l.id)}>{l.label}</Chip>)}
       </div>
-      <RecommendationGrid items={query.data?.items ?? []} loading={query.isLoading} error={query.isError} />
+      <RecommendationGrid items={query.data?.items ?? []} loading={query.isLoading} error={query.isError} source="hot" />
     </section>
   );
 }
 
-function RecommendationGrid({ items, loading, error }: { items: DoubanItem[]; loading: boolean; error: boolean }) {
+function RecommendationGrid({ items, loading, error, source }: { items: DoubanItem[]; loading: boolean; error: boolean; source: 'douban'|'bangumi'|'hot' }) {
   if (error) return <p className="text-center text-sm text-faint py-10">推荐内容加载失败</p>;
   if (loading) return <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">{Array.from({ length: 16 }).map((_, i) => <div key={i} className="aspect-[2/3] rounded-lg bg-chip animate-pulse" />)}</div>;
-  return <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">{items.map((item) => <RecommendCard key={item.id} item={item} />)}</div>;
+  return <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">{items.map((item) => <RecommendCard key={item.id} item={item} source={source} />)}</div>;
 }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
