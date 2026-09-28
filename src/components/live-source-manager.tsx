@@ -8,8 +8,9 @@ import { hostnameOf, validateSourceUrl, cn } from '@/lib/utils';
 import { SearchInput, SectionTitle, TestBadge, useSourceTests } from './settings-shared';
 import { EmptyState } from './states';
 import { Icon } from './icon';
+import { PUBLIC_LIVE_SOURCES, publicLiveSourceByUrl } from '@/lib/public-live-sources';
 
-type Filter = 'all' | 'enabled' | 'disabled' | 'preset' | 'manual';
+type Filter = 'all' | 'enabled' | 'disabled' | 'preset' | 'public' | 'manual';
 
 export function LiveSourceManager() {
   const store = useAppStore();
@@ -22,15 +23,24 @@ export function LiveSourceManager() {
 
   const rows = useMemo(() => {
     const preset = store.liveEnvSources.map((s) => ({ ...s, preset: true }));
-    const manual = store.liveSubscriptions.map((s) => ({
-      key: s.url, name: s.name || hostnameOf(s.url), url: s.url, epg: s.epg, preset: false,
-    }));
+    const manual = store.liveSubscriptions.map((s) => {
+      const publicPreset = publicLiveSourceByUrl(s.url);
+      return {
+        key: s.url,
+        name: s.name || publicPreset?.name || hostnameOf(s.url),
+        url: s.url,
+        epg: s.epg,
+        preset: Boolean(publicPreset),
+        publicPreset,
+      };
+    });
     const q = query.trim().toLowerCase();
     return [...preset, ...manual].filter((row) => {
       const enabled = store.liveSelectedUrls.includes(row.url);
       if (filter === 'enabled' && !enabled) return false;
       if (filter === 'disabled' && enabled) return false;
       if (filter === 'preset' && !row.preset) return false;
+      if (filter === 'public' && !('publicPreset' in row && row.publicPreset)) return false;
       if (filter === 'manual' && row.preset) return false;
       return !q || row.name.toLowerCase().includes(q) || row.url.toLowerCase().includes(q);
     });
@@ -42,6 +52,25 @@ export function LiveSourceManager() {
   const toggleAll = () => {
     const targets = rows.filter((r) => store.liveSelectedUrls.includes(r.url) === allEnabled).map((r) => r.url);
     if (targets.length) useAppStore.getState().toggleLiveSelectedMany(targets);
+  };
+
+  const publicInstalled = PUBLIC_LIVE_SOURCES.every((source) =>
+    store.liveSubscriptions.some((item) => item.url === source.url)
+  );
+
+  const installPublicSources = () => {
+    const state = useAppStore.getState();
+    for (const source of PUBLIC_LIVE_SOURCES) {
+      const exists = state.liveSubscriptions.some((item) => item.url === source.url);
+      if (!exists) {
+        state.addLiveSubscription(source.url, source.name);
+        if (source.role === 'backup') {
+          const next = useAppStore.getState();
+          if (next.liveSelectedUrls.includes(source.url)) next.toggleLiveSelected(source.url);
+        }
+      }
+    }
+    toast('公共 M3U 双源已安装：主源启用，备用源默认停用', 'success');
   };
 
   return (
@@ -74,7 +103,7 @@ export function LiveSourceManager() {
             <SearchInput value={query} onChange={setQuery} placeholder="搜索名称或地址" />
             <div className="flex flex-wrap gap-1">
               {([
-                ['all','全部'],['enabled','已启用'],['disabled','已停用'],['preset','预置'],['manual','手动']
+                ['all','全部'],['enabled','已启用'],['disabled','已停用'],['preset','预置'],['public','公共'],['manual','手动']
               ] as const).map(([id,label]) => (
                 <button key={id} className={cn('chip', filter === id ? 'bg-accent/10 text-accent font-medium' : 'text-muted hover:bg-hover')} onClick={() => setFilter(id)}>
                   {label}
@@ -93,7 +122,14 @@ export function LiveSourceManager() {
                     <input type="checkbox" className="h-4 w-4 accent-accent" checked={enabled}
                       onChange={() => useAppStore.getState().toggleLiveSelected(row.url)} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-content truncate">{row.name}{row.preset && <span className="ml-1.5 text-[10px] text-faint">预置</span>}</div>
+                      <div className="text-sm font-medium text-content truncate">
+                        {row.name}
+                        {('publicPreset' in row && row.publicPreset) ? (
+                          <span className="ml-1.5 text-[10px] text-faint">{row.publicPreset.role === 'primary' ? '公共主源' : '公共备用'}</span>
+                        ) : row.preset ? (
+                          <span className="ml-1.5 text-[10px] text-faint">预置</span>
+                        ) : null}
+                      </div>
                       <div className="text-xs text-faint truncate">{row.url}{row.epg && ' · EPG'}</div>
                     </div>
                     <TestBadge state={tests[row.url]} onTest={() => runTest(row.url, () => api.liveTest(row.url))}
