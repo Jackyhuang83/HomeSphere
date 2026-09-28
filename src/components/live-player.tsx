@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Artplayer from 'artplayer';
 import Hls, { type HlsConfig } from 'hls.js';
 import { Spinner } from './states';
@@ -31,15 +31,17 @@ function engineOf(url: string): Engine {
 }
 
 interface LivePlayerProps {
-  /** 上游直播流地址（Direct-only，失败不会走服务端代理） */
+  /** 首选上游直播流地址（Direct-only，失败不会走服务端代理） */
   url: string;
+  /** 同频道的备用直连线路，按优先级排列 */
+  fallbackUrls?: string[];
   title: string;
   /** 上一台/下一台：传入时注册为播放器控制条按钮（全屏内也可操作） */
   onPrevChannel?: () => void;
   onNextChannel?: () => void;
 }
 
-export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePlayerProps) {
+export function LivePlayer({ url, fallbackUrls = [], title, onPrevChannel, onNextChannel }: LivePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const artRef = useRef<any>(null);
@@ -57,6 +59,26 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
   const [osdTitle, setOsdTitle] = useState('');
   const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fallbackKey = fallbackUrls.join('\n');
+  const candidateUrls = useMemo(
+    () => [...new Set([url, ...fallbackUrls].filter(Boolean))],
+    [url, fallbackKey]
+  );
+  const [routeIndex, setRouteIndex] = useState(0);
+  const activeRouteIndex = Math.min(routeIndex, Math.max(0, candidateUrls.length - 1));
+  const activeUrl = candidateUrls[activeRouteIndex] || url;
+
+  useEffect(() => {
+    setRouteIndex(0);
+  }, [url, fallbackKey]);
+
+  useEffect(() => {
+    if (activeRouteIndex <= 0 || candidateUrls.length <= 1) return;
+    setHint(`线路 ${activeRouteIndex + 1}/${candidateUrls.length}`);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => setHint(''), 2200);
+  }, [activeRouteIndex, candidateUrls.length]);
 
   // url 变化即换台：显示频道名 2.5s
   useEffect(() => {
@@ -76,7 +98,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
   };
 
   useEffect(() => {
-    if (!containerRef.current || !url) return;
+    if (!containerRef.current || !activeUrl) return;
     setError('');
     setLoading(true);
     setShowPoster(true);
@@ -101,6 +123,25 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       }
     };
 
+    let failoverRequested = false;
+    const failOrNext = (message: string) => {
+      if (failoverRequested || disposed || destroyed) return;
+      const next = activeRouteIndex + 1;
+      if (next < candidateUrls.length) {
+        failoverRequested = true;
+        setError('');
+        setLoading(true);
+        setRouteIndex(next);
+        return;
+      }
+      setLoading(false);
+      setError(
+        candidateUrls.length > 1
+          ? `${message}（已尝试 ${candidateUrls.length} 条线路）`
+          : message
+      );
+    };
+
     /**
      * 原生播放：mp4/webm 等容器交给 <video> 直接播放。
      * 也作为 HLS 失败后的浏览器侧兜底——覆盖"地址没有 .m3u8 后缀但内容其实是 MP4"的源。
@@ -116,7 +157,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
         video.removeEventListener('error', onError);
         nativeCleanup = null;
         if (disposed || destroyed) return;
-        setError(failMessage || '直播源直连失败；可能源已失效、限制跨域或当前网络不可达');
+        failOrNext(failMessage || '直播源直连失败；可能源已失效、限制跨域或当前网络不可达');
       };
       video.addEventListener('error', onError);
       nativeCleanup = () => video.removeEventListener('error', onError);
@@ -170,7 +211,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
             hls.recoverMediaError();
             return;
           }
-          setError('直播流解码失败，可能该频道编码不受当前浏览器支持，请尝试其他频道');
+          failOrNext('直播流解码失败，可能该线路编码不受当前浏览器支持');
           return;
         }
         if (!playbackStarted) {
@@ -178,7 +219,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
           showHint('HLS 解析失败，尝试浏览器原生直连...');
           setupNative(
             video,
-            url,
+            activeUrl,
             `直播源直连失败${codeHint}；可能源已失效、限制跨域或当前网络不可达`
           );
           return;
@@ -187,7 +228,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
           // 播放中网络抖动：尝试恢复拉流；连续失败达到阈值则报错退出
           liveNetRetryCount++;
           if (liveNetRetryCount > 5) {
-            setError(`直播流中断${codeHint}，该源可能已失效，请尝试其他频道`);
+            failOrNext(`直播流中断${codeHint}，该线路可能已失效`);
             return;
           }
           hls.startLoad();
@@ -205,12 +246,12 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       try {
         Mpegts = (await import('mpegts.js')).default;
       } catch {
-        setError('FLV 播放模块加载失败，请检查网络后重试');
+        failOrNext('FLV 播放模块加载失败');
         return;
       }
       if (disposed || destroyed) return;
       if (!Mpegts.getFeatureList().mseLivePlayback) {
-        setError('当前浏览器不支持 FLV 直播播放');
+        failOrNext('当前浏览器不支持该 FLV 线路');
         return;
       }
       const player = Mpegts.createPlayer(
@@ -232,12 +273,12 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       player.load();
       player.on(Mpegts.Events.ERROR, (errType: string) => {
         if (disposed || destroyed) return;
-        setError(`直播源直连失败（${errType}）；不会使用 VPS 代理，请尝试其他频道`);
+        failOrNext(`直播线路直连失败（${errType}）`);
       });
       player.play().catch(() => {});
     };
 
-    const engine = engineOf(url);
+    const engine = engineOf(activeUrl);
     // 上一台/下一台：注册到播放器控制条（普通态与全屏均可见），未传不显示
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const controls: any[] = [];
@@ -265,7 +306,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
     }
     const art = new Artplayer({
       container: containerRef.current,
-      url,
+      url: activeUrl,
       // 原生容器统一用 'mp4'（仅用于选择处理函数，实际容器由浏览器嗅探）
       type: engine === 'flv' ? 'flv' : engine === 'native' ? 'mp4' : 'm3u8',
       volume: 0.9,
@@ -290,13 +331,13 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       moreVideoAttr: { playsInline: true },
       customType: {
         m3u8: (video: HTMLVideoElement) => {
-          setupHls(video, url);
+          setupHls(video, activeUrl);
         },
         flv: (video: HTMLVideoElement) => {
-          void setupFlv(video, url);
+          void setupFlv(video, activeUrl);
         },
         mp4: (video: HTMLVideoElement) => {
-          setupNative(video, url);
+          setupNative(video, activeUrl);
         },
       },
     });
@@ -315,7 +356,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
     });
     art.on('video:error', () => {
       // mpegts 走自身 ERROR 事件；这里兜底其它未知错误
-      if (!mpegtsRef.current) setError('视频播放失败，请尝试其他频道');
+      if (!mpegtsRef.current) failOrNext('视频播放失败');
     });
     art.on('ready', () => {
       // 直播隐藏进度条（ArtPlayer 无原生 isLive 开关）
@@ -328,7 +369,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
     // 15s 内未起播则提示
     const startTimer = setTimeout(() => {
       if (!playbackStarted && !disposed && !destroyed) {
-        setError('频道加载超时，可能该源已失效，请尝试其他频道');
+        failOrNext('频道加载超时，该线路可能已失效');
       }
     }, 15000);
 
@@ -342,7 +383,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       destroyed = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, retryNonce, onPrevChannel, onNextChannel]);
+  }, [activeUrl, activeRouteIndex, candidateUrls.length, retryNonce, onPrevChannel, onNextChannel]);
 
   return (
     <div className="relative w-full h-full">
@@ -363,7 +404,9 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       {!error && (
         <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-full pointer-events-none">
           <span className="live-dot" />
-          <span className="text-[10px] font-semibold text-white tracking-wider">LIVE</span>
+          <span className="text-[10px] font-semibold text-white tracking-wider">
+            LIVE{candidateUrls.length > 1 ? ` · 线路 ${activeRouteIndex + 1}/${candidateUrls.length}` : ''}
+          </span>
         </div>
       )}
       {/* 换台 OSD：频道名（全屏内同样可见） */}
@@ -386,6 +429,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
               // 重建播放器实例即可，无需整页刷新
               setError('');
               setHint('');
+              setRouteIndex(0);
               setRetryNonce((n) => n + 1);
             }}
           >
