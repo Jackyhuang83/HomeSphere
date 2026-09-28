@@ -15,7 +15,10 @@ export function Providers({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     Promise.resolve(useAppStore.persist.rehydrate())
-      .then(() => queryClient.fetchQuery({ queryKey: STATUS_QUERY_KEY, queryFn: () => api.status() }))
+      .then(() => {
+        useAppStore.getState().ensurePublicLiveSources();
+        return queryClient.fetchQuery({ queryKey: STATUS_QUERY_KEY, queryFn: () => api.status() });
+      })
       .then((status) => {
         if (status) useAppStore.getState().setLiveEnvSources(status.defaultLiveSources);
       })
