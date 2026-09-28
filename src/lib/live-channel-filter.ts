@@ -81,7 +81,10 @@ function normalizeChannelIdentityText(input: string): string {
     .replace(/(?:2160p|1080p|720p|576p|4k|8k|uhd|fhd|超高清|超清|高清|标清|藍光|蓝光)/gi, '')
     .replace(/(?:直播)$/g, '')
     .trim();
-  return normalizeForSearch(text);
+  return normalizeForSearch(text).replace(
+    /(?:2160p|1080p|720p|576p|4k|8k|uhd|fhd|hd|sd|超高清|超清|高清|标清|藍光|蓝光)/gi,
+    ''
+  );
 }
 
 /**
@@ -90,9 +93,13 @@ function normalizeChannelIdentityText(input: string): string {
  */
 export function canonicalLiveChannelKey(channel: KeywordMatchable): string {
   const raw = channel.rawName || channel.name;
+  const plusMatch = raw.match(/cctv[\s\-_.]*0?(\d{1,2})\s*\+/i);
   const normalized = normalizeChannelIdentityText(raw);
-  const cctv = normalized.match(/^cctv0?(\d{1,2})(\+)?/i);
-  if (cctv) return `cctv:${Number(cctv[1])}${cctv[2] ? '+' : ''}`;
+  const cctv = normalized.match(/^cctv0?(\d{1,2})/i);
+  if (cctv) {
+    const plus = plusMatch && Number(plusMatch[1]) === Number(cctv[1]) ? '+' : '';
+    return `cctv:${Number(cctv[1])}${plus}`;
+  }
 
   const cleaned = normalized
     .replace(/(?:频道|頻道)$/g, '')
