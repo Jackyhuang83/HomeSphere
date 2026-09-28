@@ -251,8 +251,8 @@ Client ─────────────► 直播源站
 - HLS / FLV / 原生媒体都由浏览器直接访问；
 - 直连失败时不会自动改走 VPS 或 Cloudflare Tunnel；
 - 可在设置中安装公共 M3U 主/备订阅；
-- 默认主源为 iptv-org News 分类；
-- 备用源为 Free-TV/IPTV，默认安装但停用；
+- 默认主源为 iptv-org Chinese 语言列表；
+- 备用源为 IPTV-CN Chinese 列表，默认安装但停用；
 - 外部 M3U 只作为频道发现与清单来源，不改变视频数据面边界。
 
 ## 11. 非目标
