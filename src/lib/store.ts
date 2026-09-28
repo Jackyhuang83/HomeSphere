@@ -100,6 +100,35 @@ export const useAppStore = create<AppState>()(
         });
       },
 
+      ensurePublicLiveSources: () => {
+        if (get().livePublicPresetVersion >= 1) return;
+
+        const currentSubscriptions = get().liveSubscriptions;
+        const currentSelected = get().liveSelectedUrls;
+        const nextSubscriptions = [...currentSubscriptions];
+
+        for (const source of PUBLIC_LIVE_SOURCES) {
+          if (!nextSubscriptions.some((item) => item.url === source.url)) {
+            nextSubscriptions.push({ url: source.url, name: source.name });
+          }
+        }
+
+        const primaryUrls = PUBLIC_LIVE_SOURCES
+          .filter((source) => source.role === 'primary')
+          .map((source) => source.url);
+        const backupUrls = new Set(
+          PUBLIC_LIVE_SOURCES.filter((source) => source.role === 'backup').map((source) => source.url)
+        );
+
+        set({
+          liveSubscriptions: nextSubscriptions,
+          liveSelectedUrls: [
+            ...new Set([...currentSelected.filter((url) => !backupUrls.has(url)), ...primaryUrls]),
+          ],
+          livePublicPresetVersion: 1,
+        });
+      },
+
       addLiveSubscription: (url, name, epg) => {
         const trimmed = url.trim();
         if (!trimmed || get().liveSubscriptions.some((s) => s.url === trimmed)) return;
