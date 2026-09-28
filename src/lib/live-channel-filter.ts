@@ -141,7 +141,7 @@ export const CHINESE_CHANNEL_CATEGORIES: Array<{ id: ChineseChannelCategory; lab
   { id: 'other', label: '其他' },
 ];
 
-const HONG_KONG_RE = /(香港|hong\s*kong|\bhk\b|tvb|無綫|无线|翡翠|明珠|鳳凰|凤凰|rthk|港台)/i;
+const HONG_KONG_RE = /(香港|hong\s*kong|\bhk\b|\btvb\b|無綫|无线|翡翠|明珠|鳳凰|凤凰|rthk|港台)/i;
 const TAIWAN_RE = /(台灣|台湾|taiwan|tvbs|民視|民视|三立|東森|东森|寰宇|中天|華視|华视|台視|台视|中視|中视|公視|公视|年代|非凡|鏡新聞|镜新闻|壹電視|壹电视|momo)/i;
 const CCTV_RE = /(cctv|央視|央视|中央電視台|中央电视台)/i;
 const SATELLITE_RE = /(衛視|卫视|satellite)/i;
