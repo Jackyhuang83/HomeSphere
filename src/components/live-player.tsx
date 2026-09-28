@@ -9,13 +9,11 @@ import { Spinner } from './states';
  * 直播播放器：与点播 player-shell 完全独立。
  * - 引擎分发：.m3u8 → hls.js（直播参数）；.flv → mpegts.js（动态加载，按需 ~150KB）；
  *   mp4/webm 等原生容器 → <video> 直接播放；
- * - 无扩展名的地址（如 /channel/xxx?token=...）默认按 HLS 处理，
- *   HLS 直连与代理均失败后**回退原生播放**一次（覆盖"内容是 MP4 却无 .m3u8 后缀"的源）；
- * - 每级直连失败自动切换到 /api/live/stream/ 代理通道重试一次；
+ * - 无扩展名的地址（如 /channel/xxx?token=...）默认按 HLS 处理；
+ * - Direct-only：直播视频只允许浏览器直连源站，失败时不会经 HomeSphere/VPS/Cloudflare Tunnel 代理；
+ * - HLS 解析失败可尝试一次浏览器原生直连，但仍不经过服务端代理；
  * - 直播态 UI：无进度条、无倍速、无截图、无连播。
  */
-
-const STREAM_PROXY_PREFIX = '/api/live/stream/';
 
 export function isFlvUrl(url: string): boolean {
   return /\.flv(\?|$)/i.test(url);
@@ -32,12 +30,8 @@ function engineOf(url: string): Engine {
   return 'hls';
 }
 
-function proxyUrl(url: string): string {
-  return STREAM_PROXY_PREFIX + encodeURIComponent(url);
-}
-
 interface LivePlayerProps {
-  /** 上游直播流地址（直连优先，失败自动走代理） */
+  /** 上游直播流地址（Direct-only，失败不会走服务端代理） */
   url: string;
   title: string;
   /** 上一台/下一台：传入时注册为播放器控制条按钮（全屏内也可操作） */
@@ -109,13 +103,12 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
 
     /**
      * 原生播放：mp4/webm 等容器交给 <video> 直接播放。
-     * 也作为 HLS 两级都失败后的兜底——覆盖"地址没有 .m3u8 后缀但内容其实是 MP4"的源。
-     * 直连失败（CORS/混合内容）时再走一次代理。
+     * 也作为 HLS 失败后的浏览器侧兜底——覆盖"地址没有 .m3u8 后缀但内容其实是 MP4"的源。
+     * 只做客户端直连，不使用 HomeSphere 服务端代理。
      */
     const setupNative = (
       video: HTMLVideoElement,
       mediaUrl: string,
-      allowProxyFallback: boolean,
       failMessage?: string
     ) => {
       cleanupEngines();
@@ -123,12 +116,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
         video.removeEventListener('error', onError);
         nativeCleanup = null;
         if (disposed || destroyed) return;
-        if (allowProxyFallback && !mediaUrl.startsWith(STREAM_PROXY_PREFIX)) {
-          showHint('直连失败，改用代理重试...');
-          setupNative(video, proxyUrl(url), false, failMessage);
-          return;
-        }
-        setError(failMessage || '该地址不是可播放的直播流（内容可能是文件或错误提示）');
+        setError(failMessage || '直播源直连失败；可能源已失效、限制跨域或当前网络不可达');
       };
       video.addEventListener('error', onError);
       nativeCleanup = () => video.removeEventListener('error', onError);
@@ -138,7 +126,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
     };
 
     /** HLS 直播参数：小缓冲、快速追帧；与点播（大缓冲、进度恢复）刻意区分 */
-    const setupHls = (video: HTMLVideoElement, mediaUrl: string, stage: 'direct' | 'proxy') => {
+    const setupHls = (video: HTMLVideoElement, mediaUrl: string) => {
       cleanupEngines();
       let liveNetRetryCount = 0;
       let mediaRecoverCount = 0;
@@ -186,19 +174,13 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
           return;
         }
         if (!playbackStarted) {
-          if (
-            stage === 'direct' &&
-            !mediaUrl.startsWith(STREAM_PROXY_PREFIX) &&
-            (data.details === 'manifestLoadError' || data.type === Hls.ErrorTypes.NETWORK_ERROR)
-          ) {
-            showHint('直连失败，改用代理重试...');
-            // 直播 manifest 重写需要本站前缀，交给代理通道
-            setupHls(video, proxyUrl(url), 'proxy');
-            return;
-          }
-          // HLS 直连与代理均失败：可能是"无 .m3u8 后缀但内容是 MP4"的源，回退原生播放
-          showHint('HLS 解析失败，尝试原生播放...');
-          setupNative(video, url, true, `直播流加载失败${codeHint}，可能该频道已失效，请尝试其他频道`);
+          // 某些无扩展名地址实际是浏览器可直接播放的容器，允许一次客户端原生直连兜底。
+          showHint('HLS 解析失败，尝试浏览器原生直连...');
+          setupNative(
+            video,
+            url,
+            `直播源直连失败${codeHint}；可能源已失效、限制跨域或当前网络不可达`
+          );
           return;
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -215,8 +197,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
 
     const setupFlv = async (
       video: HTMLVideoElement,
-      mediaUrl: string,
-      allowProxyFallback: boolean
+      mediaUrl: string
     ) => {
       cleanupEngines();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,12 +232,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       player.load();
       player.on(Mpegts.Events.ERROR, (errType: string) => {
         if (disposed || destroyed) return;
-        if (!playbackStarted && allowProxyFallback && !mediaUrl.startsWith(STREAM_PROXY_PREFIX)) {
-          showHint('直连失败，改用代理重试...');
-          void setupFlv(video, proxyUrl(url), false);
-          return;
-        }
-        setError(`直播流加载失败（${errType}），请尝试其他频道`);
+        setError(`直播源直连失败（${errType}）；不会使用 VPS 代理，请尝试其他频道`);
       });
       player.play().catch(() => {});
     };
@@ -314,13 +290,13 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       moreVideoAttr: { playsInline: true },
       customType: {
         m3u8: (video: HTMLVideoElement) => {
-          setupHls(video, url, 'direct');
+          setupHls(video, url);
         },
         flv: (video: HTMLVideoElement) => {
-          void setupFlv(video, url, true);
+          void setupFlv(video, url);
         },
         mp4: (video: HTMLVideoElement) => {
-          setupNative(video, url, true);
+          setupNative(video, url);
         },
       },
     });
