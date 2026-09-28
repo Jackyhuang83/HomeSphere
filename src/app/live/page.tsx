@@ -23,6 +23,7 @@ import { Spinner } from '@/components/states';
 import { useAuth } from '@/components/auth';
 import { allLiveSources, useAppStore } from '@/lib/store';
 import { buildImageUrl, cn } from '@/lib/utils';
+import { canonicalLiveChannelKey } from '@/lib/live-channel-filter';
 
 /**
  * 直播页：左侧播放器 + 频道信息 + 节目单；右侧频道侧栏。
@@ -75,27 +76,75 @@ function LiveContent() {
   });
 
   const { channels, failedCount } = useMemo(() => {
-    const list: LiveChannelItem[] = [];
-    const seen = new Set<string>();
+    type Route = {
+      url: string;
+      sourceUrl: string;
+      sourceName: string;
+      epg?: string;
+      sourceOrder: number;
+    };
+    const merged = new Map<string, { channel: LiveChannelItem; routes: Route[] }>();
     let failed = 0;
-    for (const { source, result } of playlistsQuery.data ?? []) {
+
+    for (const [sourceOrder, item] of (playlistsQuery.data ?? []).entries()) {
+      const { source, result } = item;
       if (result.status !== 'fulfilled') {
         failed++;
         continue;
       }
-      for (const c of result.value.channels) {
-        if (seen.has(c.url)) continue;
-        seen.add(c.url);
-        list.push({ ...c, epg: source.epg, sourceUrl: source.url });
+      for (const channel of result.value.channels) {
+        const key = canonicalLiveChannelKey(channel);
+        const route: Route = {
+          url: channel.url,
+          sourceUrl: source.url,
+          sourceName: source.name,
+          epg: source.epg,
+          sourceOrder,
+        };
+        const existing = merged.get(key);
+        if (!existing) {
+          merged.set(key, {
+            channel: { ...channel, epg: source.epg, sourceUrl: source.url },
+            routes: [route],
+          });
+          continue;
+        }
+        if (!existing.routes.some((candidate) => candidate.url === route.url)) {
+          existing.routes.push(route);
+        }
+        if (!existing.channel.logo && channel.logo) existing.channel.logo = channel.logo;
+        if (!existing.channel.tvgId && channel.tvgId) existing.channel.tvgId = channel.tvgId;
+        if (!existing.channel.group && channel.group) existing.channel.group = channel.group;
+        if (!existing.channel.country && channel.country) existing.channel.country = channel.country;
+        if (!existing.channel.rawName && channel.rawName) existing.channel.rawName = channel.rawName;
+        if (!existing.channel.epg && source.epg) existing.channel.epg = source.epg;
       }
     }
+
+    const list = [...merged.values()].map(({ channel, routes }) => {
+      routes.sort((a, b) => {
+        const aHttps = a.url.startsWith('https://') ? 0 : 1;
+        const bHttps = b.url.startsWith('https://') ? 0 : 1;
+        return aHttps - bHttps || a.sourceOrder - b.sourceOrder;
+      });
+      const first = routes[0];
+      return {
+        ...channel,
+        url: first.url,
+        sourceUrl: first.sourceUrl,
+        epg: channel.epg || first.epg,
+        playbackUrls: routes.map((route) => route.url),
+        playbackSources: routes.map((route) => route.sourceName),
+      };
+    });
+
     return { channels: list, failedCount: failed };
   }, [playlistsQuery.data]);
 
   // 当前频道：优先取列表内完整对象（含台标），否则由 URL 参数重建
   const currentUrl = searchParams.get('url') || '';
   const currentChannel = useMemo(() => {
-    const found = channels.find((c) => c.url === currentUrl);
+    const found = channels.find((c) => c.url === currentUrl || c.playbackUrls?.includes(currentUrl));
     if (found) return found;
     if (!currentUrl) return undefined;
     return {
@@ -219,7 +268,8 @@ function LiveContent() {
             <div className="aspect-video bg-black rounded-lg overflow-hidden">
               {currentUrl ? (
                 <LivePlayer
-                  url={currentUrl}
+                  url={currentChannel?.url || currentUrl}
+                  fallbackUrls={currentChannel?.playbackUrls?.filter((item) => item !== (currentChannel?.url || currentUrl))}
                   title={currentChannel?.name || '直播'}
                   onPrevChannel={goPrevChannel}
                   onNextChannel={goNextChannel}
@@ -257,6 +307,11 @@ function LiveContent() {
                     <h1 className="text-sm font-semibold text-content truncate">{currentChannel.name}</h1>
                     {currentChannel.group && (
                       <span className="tag bg-chip text-faint shrink-0">{currentChannel.group}</span>
+                    )}
+                    {(currentChannel.playbackUrls?.length ?? 0) > 1 && (
+                      <span className="tag bg-accent/10 text-accent shrink-0">
+                        {currentChannel.playbackUrls?.length} 条线路
+                      </span>
                     )}
                   </div>
                   <p className="text-xs text-faint truncate mt-0.5">{currentChannel.url}</p>
