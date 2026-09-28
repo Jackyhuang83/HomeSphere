@@ -156,6 +156,88 @@ show_resources() {
   docker stats --no-stream homesphere media-bridge 2>/dev/null || true
 }
 
+playback_safety_check() {
+  clear
+  echo "播放链路安全自检"
+  echo "================"
+  echo
+  echo "检查目标：HomeSphere 只做控制面，115 视频字节不经过 VPS / Cloudflare Tunnel。"
+  echo
+
+  local failed=0
+  local warned=0
+  local hs_port bridge_port domain code
+
+  hs_port="$(docker port homesphere 8080/tcp 2>/dev/null || true)"
+  if printf '%s\n' "$hs_port" | grep -qx '127\.0\.0\.1:8080'; then
+    echo "[通过] HomeSphere 仅监听 127.0.0.1:8080"
+  else
+    echo "[失败] HomeSphere 8080 端口不是仅本机监听：${hs_port:-未检测到}"
+    failed=$((failed+1))
+  fi
+
+  bridge_port="$(docker port media-bridge 12333/tcp 2>/dev/null || true)"
+  if printf '%s\n' "$bridge_port" | grep -qx '127\.0\.0\.1:12333'; then
+    echo "[通过] Media Bridge 仅监听 127.0.0.1:12333"
+  else
+    echo "[失败] Media Bridge 12333 端口不是仅本机监听：${bridge_port:-未检测到}"
+    failed=$((failed+1))
+  fi
+
+  if grep -q "status:302" "$APP_DIR/src/app/api/play/[id]/route.ts" 2>/dev/null \
+    && grep -q "Location:target" "$APP_DIR/src/app/api/play/[id]/route.ts" 2>/dev/null; then
+    echo "[通过] 115 点播接口固定返回 302 到最终 CDN"
+  else
+    echo "[失败] 未确认 115 点播接口的 302 重定向保护"
+    failed=$((failed+1))
+  fi
+
+  if grep -q "Media Bridge 必须返回 3xx" "$APP_DIR/src/lib/library/bridge.ts" 2>/dev/null; then
+    echo "[通过] Media Bridge 返回 200/媒体字节时会被拒绝"
+  else
+    echo "[失败] 未确认 Bridge 禁止代理媒体字节的保护"
+    failed=$((failed+1))
+  fi
+
+  if grep -q "rejects bridges that proxy media bytes instead of redirecting" "$APP_DIR/src/lib/library/bridge.test.ts" 2>/dev/null; then
+    echo "[通过] CI 单元测试覆盖“禁止 Bridge 代理视频字节”"
+  else
+    echo "[警告] 未找到对应自动化回归测试"
+    warned=$((warned+1))
+  fi
+
+  if systemctl is-active --quiet "$TUNNEL_SERVICE" 2>/dev/null; then
+    domain="$(sed -n "s/^HOMESPHERE_DOMAIN='\(.*\)'/\1/p" /etc/homesphere/cloudflared.env 2>/dev/null | head -n1)"
+    if [ -n "$domain" ]; then
+      code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "https://$domain/api/auth" 2>/dev/null || true)"
+      if [ "$code" = "200" ]; then
+        echo "[通过] Cloudflare Tunnel 仅作为 HomeSphere Web/API 入口"
+      else
+        echo "[警告] Tunnel 正在运行，但公网 /api/auth 验证返回 HTTP ${code:-网络错误}"
+        warned=$((warned+1))
+      fi
+    else
+      echo "[警告] Tunnel 正在运行，但未读取到 HomeSphere 域名"
+      warned=$((warned+1))
+    fi
+  else
+    echo "[提示] Cloudflare Tunnel 尚未启用；不影响 115 点播 302 架构"
+  fi
+
+  echo
+  if [ "$failed" -eq 0 ]; then
+    echo "结论：通过"
+    echo "115 点播链路保持：页面/API -> HomeSphere；视频 -> 最终 CDN。"
+    echo "HomeSphere/VPS 不接收、缓存、转发 115 视频字节。"
+  else
+    echo "结论：不通过（${failed} 项失败，${warned} 项警告）"
+    echo "请先修复失败项，不建议继续扩大公网使用。"
+  fi
+
+  echo
+  echo "说明：此检查针对 115 STRM 点播链路；自定义 M3U 直播是独立链路。"
+}
+
 logs_menu() {
   while true; do
     clear
