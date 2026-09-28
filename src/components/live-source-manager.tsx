@@ -70,7 +70,7 @@ export function LiveSourceManager() {
         }
       }
     }
-    toast('公共 M3U 双源已安装：主源启用，备用源默认停用', 'success');
+    toast('中文 M3U 双源已安装：主源启用，备用源默认停用', 'success');
   };
 
   return (
