@@ -7,22 +7,27 @@ export interface PublicLiveSourcePreset {
   description: string;
 }
 
+export const LEGACY_PUBLIC_LIVE_SOURCE_URLS = [
+  'https://iptv-org.github.io/iptv/categories/news.m3u',
+  'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+] as const;
+
 export const PUBLIC_LIVE_SOURCES: PublicLiveSourcePreset[] = [
   {
-    id: 'iptv-org-news',
-    name: '公共新闻源 · 主（iptv-org）',
+    id: 'iptv-org-chinese',
+    name: '中文频道 · 主（iptv-org）',
     role: 'primary',
-    url: 'https://iptv-org.github.io/iptv/categories/news.m3u',
+    url: 'https://iptv-org.github.io/iptv/languages/zho.m3u',
     projectUrl: 'https://github.com/iptv-org/iptv',
-    description: '每日生成的公开 News 分类列表，作为默认公共 M3U 主源。',
+    description: 'iptv-org 自动生成的 Chinese 语言列表，作为 HomeSphere 默认中文主源。',
   },
   {
-    id: 'free-tv-backup',
-    name: '公共直播源 · 备（Free-TV/IPTV）',
+    id: 'iptv-cn-chinese',
+    name: '中文频道 · 备（IPTV-CN）',
     role: 'backup',
-    url: 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
-    projectUrl: 'https://github.com/Free-TV/IPTV',
-    description: '强调免费频道与质量优先，作为备用公共 M3U 源；默认停用。',
+    url: 'https://iptv-cn.github.io/IPTV/languages/zho.m3u',
+    projectUrl: 'https://github.com/IPTV-CN/IPTV',
+    description: '偏 CCTV、卫视、地方与港澳频道的中文列表，作为备用源；默认停用。',
   },
 ];
 
