@@ -57,6 +57,9 @@ if [ "$MIGRATED_BRIDGE" -eq 1 ]; then
   fi
 fi
 
+say "配置低频 STRM 本地索引"
+bash "$APP_DIR/scripts/install-strm-timer.sh"
+
 if systemctl list-unit-files homesphere-cloudflared.service >/dev/null 2>&1; then
   systemctl restart homesphere-cloudflared.service >/dev/null 2>&1 || true
 fi
