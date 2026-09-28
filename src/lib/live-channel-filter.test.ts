@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalLiveChannelKey,
   classifyChineseChannel,
   isSlowSource,
   matchesAlive,
@@ -47,6 +48,36 @@ describe('matchesKeyword', () => {
   });
 });
 
+
+
+describe('canonicalLiveChannelKey', () => {
+  it('合并 CCTV 编号的常见写法', () => {
+    expect(canonicalLiveChannelKey(channel({ name: 'CCTV-1 综合' }))).toBe('cctv:1');
+    expect(canonicalLiveChannelKey(channel({ name: 'CCTV1高清' }))).toBe('cctv:1');
+    expect(canonicalLiveChannelKey(channel({ name: 'CCTV-5+ 体育赛事' }))).toBe('cctv:5+');
+  });
+
+  it('忽略画质与分隔符差异', () => {
+    expect(canonicalLiveChannelKey(channel({ name: '湖南卫视 HD' }))).toBe(
+      canonicalLiveChannelKey(channel({ name: '湖南卫视高清' }))
+    );
+  });
+
+  it('统一部分繁简体频道名', () => {
+    expect(canonicalLiveChannelKey(channel({ name: '鳳凰衛視資訊台' }))).toBe(
+      canonicalLiveChannelKey(channel({ name: '凤凰卫视资讯台' }))
+    );
+  });
+
+  it('不同频道保持不同键', () => {
+    expect(canonicalLiveChannelKey(channel({ name: 'TVBS 新闻' }))).not.toBe(
+      canonicalLiveChannelKey(channel({ name: 'TVB 翡翠台' }))
+    );
+    expect(canonicalLiveChannelKey(channel({ name: '湖南卫视' }))).not.toBe(
+      canonicalLiveChannelKey(channel({ name: '浙江卫视' }))
+    );
+  });
+});
 
 describe('classifyChineseChannel', () => {
   it('识别 CCTV', () => {
