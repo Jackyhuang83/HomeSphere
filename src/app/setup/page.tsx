@@ -47,7 +47,7 @@ export default function SetupPage(){
       <section className="rounded-xl border border-line bg-card p-4 mb-5">
         <h2 className="font-semibold text-content">你的 VPS 可以用</h2>
         <p className="text-sm text-muted mt-2">
-          1C1G、50GB、10Mbps 足够运行 HomeSphere + 轻量 Media Bridge，前提是不开转码、不代理视频字节。
+          1C1G、50GB、10Mbps 足够运行 HomeSphere + QMediaSync Media Bridge，前提是不开转码、不代理视频字节。
           视频必须由最终 CDN 直接传给 iPhone / iPad。
         </p>
       </section>
@@ -77,8 +77,8 @@ export default function SetupPage(){
           {status.ready
             ? <p className="text-sm text-muted mt-2">进入片库测试播放链路，再整理 TMDB 海报。</p>
             : <ol className="text-sm text-muted mt-2 space-y-1 list-decimal pl-5">
-                <li>在 VPS 上启动 Media Bridge，并授权你的115账号。</li>
-                <li>让 Bridge 把 STRM 写到共享目录。</li>
+                <li>进入 QMediaSync，完成 115 OAuth 授权。</li>
+                <li>让 QMediaSync 把 STRM 写到 /media，并把 STRM 直连地址设为 http://media-bridge:12333。</li>
                 <li>回到 HomeSphere 点击“同步STRM”。</li>
               </ol>}
           <div className="flex gap-2 mt-4">
