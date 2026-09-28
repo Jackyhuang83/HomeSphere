@@ -10,7 +10,7 @@ import {
   type ProbeLike,
 } from './live-channel-filter';
 
-const channel = (over: Partial<{ name: string; tvgId?: string; group?: string; url: string }>) => ({
+const channel = (over: Partial<{ name: string; tvgId?: string; group?: string; country?: string; url: string }>) => ({
   url: 'https://s.example/1',
   name: '',
   ...over,
@@ -74,6 +74,23 @@ describe('classifyChineseChannel', () => {
     expect(classifyChineseChannel(channel({ name: '深圳都市频道' }))).toBe('local');
     expect(classifyChineseChannel(channel({ name: '北京新闻' }))).toBe('local');
     expect(classifyChineseChannel(channel({ name: '珠江频道' }))).toBe('local');
+  });
+
+  it('按 tvg-country 识别洲别', () => {
+    expect(classifyChineseChannel(channel({ name: '海外中文频道', country: 'JP' }))).toBe('asia');
+    expect(classifyChineseChannel(channel({ name: '欧洲中文台', country: 'GB' }))).toBe('europe');
+    expect(classifyChineseChannel(channel({ name: '华语电视', country: 'US' }))).toBe('americas');
+    expect(classifyChineseChannel(channel({ name: '华人频道', country: 'ZA' }))).toBe('africa');
+  });
+
+  it('中文电视类型优先于洲别', () => {
+    expect(classifyChineseChannel(channel({ name: '凤凰卫视资讯台', country: 'US' }))).toBe('hongkong');
+    expect(classifyChineseChannel(channel({ name: 'TVBS 新闻', country: 'US' }))).toBe('taiwan');
+    expect(classifyChineseChannel(channel({ name: 'CCTV-4 中文国际', country: 'US' }))).toBe('cctv');
+  });
+
+  it('没有 tvg-country 时可从 tvg-id 国家后缀辅助识别', () => {
+    expect(classifyChineseChannel(channel({ name: '海外华语频道', tvgId: 'ExampleTV.us' }))).toBe('americas');
   });
 
   it('其余归入其他', () => {
