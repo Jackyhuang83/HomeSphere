@@ -16,7 +16,7 @@ HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋
 115
  │
  ▼
-Media Bridge
+Media Bridge（QMediaSync）
  ├─ 管理 115 授权
  ├─ 生成 STRM
  └─ 播放时返回 3xx
@@ -41,7 +41,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 
 ## 核心原则
 
-- 115 授权由 Media Bridge 负责；
+- 115 授权由 Media Bridge（QMediaSync） 负责；
 - HomeSphere 只消费 STRM，不直接接入网盘 API；
 - STRM 目录只读挂载给 HomeSphere；
 - 播放时才解析临时直链；
@@ -81,7 +81,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
 ```
 
-脚本会自动安装 Docker、创建目录、生成配置、拉取预构建镜像并启动 HomeSphere 与 Media Bridge。
+脚本会自动安装 Docker、创建目录、生成配置、拉取预构建镜像并启动 HomeSphere 与 Media Bridge（QMediaSync）。
 
 不需要手动编辑 `.env`、Docker Compose 或上传配置文件。
 
@@ -129,7 +129,7 @@ VPS 不需要开放 80 / 443 / 8080 / 12333。
 
 ```text
 HomeSphere     127.0.0.1:8080
-Media Bridge   127.0.0.1:12333
+Media Bridge（QMediaSync）   127.0.0.1:12333
 ```
 
 两者都不会直接裸露公网。
