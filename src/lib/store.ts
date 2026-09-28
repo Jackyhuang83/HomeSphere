@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { LiveSourceConfig } from './types';
-import { PUBLIC_LIVE_SOURCES } from './public-live-sources';
+import { LEGACY_PUBLIC_LIVE_SOURCE_URLS, PUBLIC_LIVE_SOURCES } from './public-live-sources';
 
 export interface LiveSubscription {
   url: string;
@@ -101,10 +101,11 @@ export const useAppStore = create<AppState>()(
       },
 
       ensurePublicLiveSources: () => {
-        if (get().livePublicPresetVersion >= 1) return;
+        if (get().livePublicPresetVersion >= 2) return;
 
-        const currentSubscriptions = get().liveSubscriptions;
-        const currentSelected = get().liveSelectedUrls;
+        const legacy = new Set<string>(LEGACY_PUBLIC_LIVE_SOURCE_URLS);
+        const currentSubscriptions = get().liveSubscriptions.filter((item) => !legacy.has(item.url));
+        const currentSelected = get().liveSelectedUrls.filter((url) => !legacy.has(url));
         const nextSubscriptions = [...currentSubscriptions];
 
         for (const source of PUBLIC_LIVE_SOURCES) {
@@ -125,7 +126,7 @@ export const useAppStore = create<AppState>()(
           liveSelectedUrls: [
             ...new Set([...currentSelected.filter((url) => !backupUrls.has(url)), ...primaryUrls]),
           ],
-          livePublicPresetVersion: 1,
+          livePublicPresetVersion: 2,
         });
       },
 
