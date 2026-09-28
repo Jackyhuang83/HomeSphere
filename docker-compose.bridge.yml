@@ -4,14 +4,21 @@ services:
       - media-bridge
 
   media-bridge:
-    image: qicfan/115strm:latest
+    image: qicfan/qmediasync:latest
     container_name: media-bridge
     restart: unless-stopped
+    stop_grace_period: 30s
     # 管理页面只监听 VPS 本机；通过 SSH 隧道访问，不直接暴露公网。
     ports:
       - "127.0.0.1:12333:12333"
     environment:
       TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:12333/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./bridge-config:/app/config
       - ./media:/media
