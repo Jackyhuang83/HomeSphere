@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyChineseChannel,
   isSlowSource,
   matchesAlive,
   matchesKeyword,
@@ -43,6 +44,40 @@ describe('matchesKeyword', () => {
 
   it('不相关关键字不匹配', () => {
     expect(matchesKeyword(c, normalizeForSearch('湖南卫视'))).toBe(false);
+  });
+});
+
+
+describe('classifyChineseChannel', () => {
+  it('识别 CCTV', () => {
+    expect(classifyChineseChannel(channel({ name: 'CCTV-13 新闻' }))).toBe('cctv');
+    expect(classifyChineseChannel(channel({ name: '中央电视台新闻频道' }))).toBe('cctv');
+  });
+
+  it('识别卫视', () => {
+    expect(classifyChineseChannel(channel({ name: '湖南卫视' }))).toBe('satellite');
+    expect(classifyChineseChannel(channel({ name: '浙江卫视 HD' }))).toBe('satellite');
+  });
+
+  it('识别香港频道并优先于卫视字样', () => {
+    expect(classifyChineseChannel(channel({ name: '凤凰卫视资讯台' }))).toBe('hongkong');
+    expect(classifyChineseChannel(channel({ name: 'TVB 翡翠台' }))).toBe('hongkong');
+  });
+
+  it('识别台湾频道', () => {
+    expect(classifyChineseChannel(channel({ name: 'TVBS 新闻' }))).toBe('taiwan');
+    expect(classifyChineseChannel(channel({ name: '三立 LIVE 新闻' }))).toBe('taiwan');
+    expect(classifyChineseChannel(channel({ name: '东森新闻' }))).toBe('taiwan');
+  });
+
+  it('识别地方频道', () => {
+    expect(classifyChineseChannel(channel({ name: '深圳都市频道' }))).toBe('local');
+    expect(classifyChineseChannel(channel({ name: '北京新闻' }))).toBe('local');
+    expect(classifyChineseChannel(channel({ name: '珠江频道' }))).toBe('local');
+  });
+
+  it('其余归入其他', () => {
+    expect(classifyChineseChannel(channel({ name: '中文国际电影频道' }))).toBe('other');
   });
 });
 
