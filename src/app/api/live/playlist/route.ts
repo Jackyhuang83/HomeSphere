@@ -31,6 +31,7 @@ function toM3uText(playlist: LivePlaylistResponse): string {
       `tvg-id="${esc(c.tvgId || c.id)}"`,
       c.rawName ? `tvg-name="${esc(c.rawName)}"` : '',
       c.logo ? `tvg-logo="${esc(c.logo)}"` : '',
+      c.country ? `tvg-country="${esc(c.country)}"` : '',
       `group-title="${esc(c.group || '')}"`,
     ]
       .filter(Boolean)
