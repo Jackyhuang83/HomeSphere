@@ -64,6 +64,8 @@ Media Bridge
 
 HomeSphere 扫描的是本地 STRM，不是115目录。
 
+本地索引由 `homesphere-strm-sync.timer` 低频每 6 小时触发一次，也可以在管理菜单或片库页面手动触发。自动索引与手工索引共享同一个进程内互斥锁，避免并发重建 SQLite。
+
 因此正常的：
 
 - 首页；
