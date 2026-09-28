@@ -141,6 +141,9 @@ docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜
 say "启动 HomeSphere 与 Media Bridge"
 docker compose "${COMPOSE_FILES[@]}" up -d
 
+say "配置低频 STRM 本地索引"
+bash "$APP_DIR/scripts/install-strm-timer.sh"
+
 # 清理更新后不再使用的旧镜像，避免 10GB VPS 长期堆积。
 docker image prune -f >/dev/null 2>&1 || true
 
