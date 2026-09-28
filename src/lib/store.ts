@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { LiveSourceConfig } from './types';
+import { PUBLIC_LIVE_SOURCES } from './public-live-sources';
 
 export interface LiveSubscription {
   url: string;
@@ -44,8 +45,10 @@ interface AppState {
   liveFavorites: string[];
   liveRecent: LiveRecentEntry[];
   liveProbeResults: Record<string, LiveProbeEntry>;
+  livePublicPresetVersion: number;
 
   setLiveEnvSources: (list: LiveSourceConfig[]) => void;
+  ensurePublicLiveSources: () => void;
   addLiveSubscription: (url: string, name?: string, epg?: string) => void;
   removeLiveSubscription: (url: string) => { entry: LiveSubscription; selected: boolean } | null;
   restoreLiveSubscription: (snapshot: { entry: LiveSubscription; selected: boolean }) => void;
@@ -85,6 +88,7 @@ export const useAppStore = create<AppState>()(
       liveFavorites: [],
       liveRecent: [],
       liveProbeResults: {},
+      livePublicPresetVersion: 0,
 
       setLiveEnvSources: (list) => {
         const seen = new Set(get().liveEnvKeysSeen);
@@ -182,6 +186,7 @@ export const useAppStore = create<AppState>()(
         liveSelectedUrls: s.liveSelectedUrls,
         liveFavorites: s.liveFavorites,
         liveRecent: s.liveRecent,
+        livePublicPresetVersion: s.livePublicPresetVersion,
       }),
       skipHydration: true,
     }
