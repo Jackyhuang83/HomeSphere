@@ -154,7 +154,11 @@ http://127.0.0.1:12333
 
 ## 5. 第一次设置 Media Bridge（QMediaSync）
 
-当前 HomeSphere 的 Media Bridge（QMediaSync） 使用：\n\n```text\nqicfan/qmediasync:latest\n```
+当前 HomeSphere 的 Media Bridge（QMediaSync） 使用：
+
+```text
+qicfan/qmediasync:latest
+```
 
 第一次进入 Media Bridge（QMediaSync） 后：
 
