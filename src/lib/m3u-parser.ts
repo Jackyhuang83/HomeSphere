@@ -112,6 +112,7 @@ export function parseM3u(content: string, baseUrl?: string): LiveChannel[] {
       group: attrs['group-title'] || cur?.extGroup || undefined,
       tvgId,
       rawName: attrs['tvg-name'] || undefined,
+      country: attrs['tvg-country'] || undefined,
     });
   }
 
