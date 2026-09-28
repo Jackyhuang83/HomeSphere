@@ -242,6 +242,22 @@ http://127.0.0.1:8080/setup
 
 HomeSphere 会自动把 STRM 建立成本地 SQLite 片库。
 
+安装/更新脚本还会启用：
+
+```text
+homesphere-strm-sync.timer
+```
+
+它每 6 小时低频触发一次 **HomeSphere 本地 STRM 索引**。这一步只扫描 VPS 上的 `/media` 文本文件，不下载 115 视频，也不替代 QMediaSync 自己的 115 同步。
+
+第一次验证时也可以：
+
+```text
+homesphere
+→ 12. 115 / STRM
+→ 3. 立即同步 HomeSphere STRM 索引
+```
+
 普通浏览、搜索、海报墙展示不会反复访问 115。
 
 ---
