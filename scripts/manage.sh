@@ -345,6 +345,7 @@ HomeSphere $(version)
 8. Cloudflare Tunnel
 9. 查看日志
 10. 系统资源
+11. 播放链路安全自检
 0. 退出
 EOF
 
@@ -362,6 +363,7 @@ EOF
     8) tunnel_menu ;;
     9) logs_menu ;;
     10) show_resources; pause ;;
+    11) playback_safety_check; pause ;;
     0) exit 0 ;;
     *) ;;
   esac
