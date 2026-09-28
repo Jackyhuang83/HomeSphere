@@ -24,7 +24,7 @@ HomeSphere 不直接实现任何网盘客户端。
 - 播放时解析临时下载地址；
 - 返回 3xx。
 
-当前默认部署使用轻量 q115-strm。
+当前默认部署使用 QMediaSync，容器名仍固定为 `media-bridge`。
 
 Bridge 属于部署层，只要满足本文契约，未来可以替换而不修改 HomeSphere 核心。
 
