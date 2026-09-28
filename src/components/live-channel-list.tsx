@@ -48,6 +48,10 @@ export interface LiveChannelItem extends LiveChannel {
   epg?: string;
   /** 所属直播源地址（M3U 订阅 URL），写入最近观看以便订阅删除时清理 */
   sourceUrl?: string;
+  /** 同一频道合并后的候选播放线路，按优先级排列 */
+  playbackUrls?: string[];
+  /** 与 playbackUrls 对齐的来源名称，仅用于 UI 提示 */
+  playbackSources?: string[];
 }
 
 interface ChannelListProps {
