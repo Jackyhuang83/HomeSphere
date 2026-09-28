@@ -24,7 +24,7 @@ describe('normalizeStreamUrl', () => {
 describe('parseM3u', () => {
   it('解析标准 M3U 属性', () => {
     const m3u = `#EXTM3U
-#EXTINF:-1 tvg-id="cctv1" tvg-name="CCTV1" tvg-logo="https://img/logo1.png" group-title="央视",CCTV-1 综合
+#EXTINF:-1 tvg-id="cctv1" tvg-name="CCTV1" tvg-logo="https://img/logo1.png" tvg-country="CN" group-title="央视",CCTV-1 综合
 https://stream.example.com/cctv1.m3u8
 #EXTINF:-1 tvg-id="cctv5" group-title="体育",CCTV-5 体育
 https://stream.example.com/cctv5.m3u8`;
@@ -38,6 +38,7 @@ https://stream.example.com/cctv5.m3u8`;
       group: '央视',
       tvgId: 'cctv1',
       rawName: 'CCTV1',
+      country: 'CN',
     });
     expect(channels[1].group).toBe('体育');
   });
