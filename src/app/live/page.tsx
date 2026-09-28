@@ -74,7 +74,7 @@ function LiveContent() {
     staleTime: 10 * 60_000,
   });
 
-  const { channels, groups, failedCount } = useMemo(() => {
+  const { channels, failedCount } = useMemo(() => {
     const list: LiveChannelItem[] = [];
     const seen = new Set<string>();
     let failed = 0;
@@ -89,10 +89,7 @@ function LiveContent() {
         list.push({ ...c, epg: source.epg, sourceUrl: source.url });
       }
     }
-    const groups = [...new Set(list.map((c) => c.group).filter((g): g is string => Boolean(g)))].sort(
-      (a, b) => a.localeCompare(b, 'zh')
-    );
-    return { channels: list, groups, failedCount: failed };
+    return { channels: list, failedCount: failed };
   }, [playlistsQuery.data]);
 
   // 当前频道：优先取列表内完整对象（含台标），否则由 URL 参数重建
@@ -415,7 +412,6 @@ function LiveContent() {
               ) : (
                 <LiveChannelList
                   channels={channels}
-                  groups={groups}
                   currentUrl={currentUrl}
                   onSelect={handleSelect}
                   onFilteredChange={handleFilteredChange}
