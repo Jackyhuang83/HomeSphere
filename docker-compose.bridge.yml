@@ -8,7 +8,10 @@ services:
     container_name: media-bridge
     restart: unless-stopped
     stop_grace_period: 30s
-    # 管理页面只监听 VPS 本机；通过 SSH 隧道访问，不直接暴露公网。
+    depends_on:
+      qms-postgres:
+        condition: service_healthy
+    # 管理页面仅监听 VPS 本机；由现有 Cloudflare Tunnel + Access 发布，不直接暴露公网。
     ports:
       - "127.0.0.1:12333:12333"
     environment:
@@ -22,3 +25,41 @@ services:
     volumes:
       - ./bridge-config:/app/config
       - ./media:/media
+
+  qms-postgres:
+    image: postgres:15-alpine
+    container_name: qms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${QMS_POSTGRES_DB:-qmediasync}
+      POSTGRES_USER: ${QMS_POSTGRES_USER:-qmediasync}
+      POSTGRES_PASSWORD: ${QMS_POSTGRES_PASSWORD:?请在 .env 中设置 QMS_POSTGRES_PASSWORD}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    # 1C / 1GB VPS 的保守参数；QMediaSync 为小规模家庭 STRM 场景。
+    command:
+      - postgres
+      - -c
+      - max_connections=20
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - jit=off
+    shm_size: 64mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - qms-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  qms-postgres-data:
