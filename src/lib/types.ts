@@ -41,6 +41,8 @@ export interface LiveChannel {
   group?: string;
   tvgId?: string;
   rawName?: string;
+  /** M3U tvg-country，可能是单个 ISO 代码或以分号分隔的多个代码 */
+  country?: string;
 }
 
 export interface LivePlaylistResponse {
