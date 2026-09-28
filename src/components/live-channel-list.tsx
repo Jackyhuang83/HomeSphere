@@ -5,12 +5,15 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { buildImageUrl, cn } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
 import {
+  CHINESE_CHANNEL_CATEGORIES,
+  classifyChineseChannel,
   isSlowSource,
   matchesAlive,
   matchesKeyword,
   normalizeForSearch,
   sortChannels,
   type AliveFilter,
+  type ChineseChannelCategory,
   type LiveSortMode,
 } from '@/lib/live-channel-filter';
 import { useLiveProbe, type ProbeResult } from './use-live-probe';
@@ -49,14 +52,13 @@ export interface LiveChannelItem extends LiveChannel {
 
 interface ChannelListProps {
   channels: LiveChannelItem[];
-  groups: string[];
   currentUrl: string;
   onSelect: (channel: LiveChannelItem) => void;
   /** 筛选+排序结果变化时上报（页面级键盘换台沿此列表顺序切换） */
   onFilteredChange?: (list: LiveChannelItem[]) => void;
 }
 
-type View = 'all' | 'fav' | 'recent';
+type View = 'all' | 'fav' | 'recent' | ChineseChannelCategory;
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -67,13 +69,12 @@ function useDebouncedValue<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilteredChange }: ChannelListProps) {
+export function LiveChannelList({ channels, currentUrl, onSelect, onFilteredChange }: ChannelListProps) {
   // 精确订阅：避免任何 store 字段变化（尤其测活节流写回）引发本组件重渲染
   const liveFavorites = useAppStore((s) => s.liveFavorites);
   const liveRecent = useAppStore((s) => s.liveRecent);
 
   const [view, setView] = useState<View>('all');
-  const [group, setGroup] = useState<string>('');
   const [keyword, setKeyword] = useState('');
   const debouncedKeyword = useDebouncedValue(keyword, SEARCH_DEBOUNCE_MS);
   const [sortMode, setSortMode] = useState<LiveSortMode>('default');
@@ -114,17 +115,16 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
       list = liveRecent
         .map((r) => channels.find((c) => c.url === r.url))
         .filter((c): c is LiveChannelItem => Boolean(c));
-    } else {
+    } else if (view === 'all') {
       list = channels;
-    }
-    if (view !== 'recent' && group) {
-      list = list.filter((c) => c.group === group);
+    } else {
+      list = channels.filter((c) => classifyChineseChannel(c) === view);
     }
     if (normalizedKeyword) {
       list = list.filter((c) => matchesKeyword(c, normalizedKeyword));
     }
     return sortChannels(list, sortMode, { recentOrder, probeOf: (url) => probeResults.get(url) });
-  }, [channels, favSet, liveRecent, view, group, normalizedKeyword, sortMode, recentOrder, probeResults]);
+  }, [channels, favSet, liveRecent, view, normalizedKeyword, sortMode, recentOrder, probeResults]);
 
   const filtered = useMemo(
     () =>
@@ -176,7 +176,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
     const idx = filteredRef.current.findIndex((c) => c.url === currentUrl);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: 'auto' });
     else virtualizer.scrollToOffset(0);
-  }, [view, group, sortMode, debouncedKeyword, aliveFilter, currentUrl, virtualizer]);
+  }, [view, sortMode, debouncedKeyword, aliveFilter, currentUrl, virtualizer]);
 
   const scrollToChannelRow = useCallback(
     (url: string) => {
@@ -211,26 +211,32 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* 视图 tab */}
-      <div className="flex items-center gap-1 px-3 pt-2.5 pb-2 border-b border-line shrink-0">
-        {(
-          [
+      {/* 中文频道智能分类 */}
+      <div className="px-3 pt-2.5 pb-2 border-b border-line shrink-0">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1">
+          {([
             ['all', `全部${channels.length ? ` ${channels.length}` : ''}`],
             ['fav', `收藏${liveFavorites.length ? ` ${liveFavorites.length}` : ''}`],
+            ...CHINESE_CHANNEL_CATEGORIES.map((item) => [
+              item.id,
+              `${item.label} ${channels.filter((c) => classifyChineseChannel(c) === item.id).length}`,
+            ] as [View, string]),
             ['recent', '最近'],
-          ] as [View, string][]
-        ).map(([v, label]) => (
-          <button
-            key={v}
-            className={cn(
-              'px-2.5 py-1 rounded-md text-xs transition-colors',
-              view === v ? 'bg-accent/10 text-accent font-medium' : 'text-muted hover:text-content hover:bg-hover'
-            )}
-            onClick={() => setView(v)}
-          >
-            {label}
-          </button>
-        ))}
+          ] as [View, string][]).map(([v, label]) => (
+            <button
+              key={v}
+              className={cn(
+                'shrink-0 px-2.5 py-1 rounded-full text-xs whitespace-nowrap transition-colors border',
+                view === v
+                  ? 'bg-accent text-on-accent border-accent'
+                  : 'bg-chip text-muted border-line hover:text-content hover:bg-hover'
+              )}
+              onClick={() => setView(v)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 搜索 + 排序 */}
@@ -336,18 +342,6 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
         )}
       </div>
 
-      {/* 分组标签条（横向可滑动） */}
-      {view === 'all' && groups.length > 0 && (
-        <div className="px-3 pb-2 shrink-0">
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1">
-            <GroupChip active={!group} label="全部分组" onClick={() => setGroup('')} />
-            {groups.map((g) => (
-              <GroupChip key={g} active={group === g} label={g} onClick={() => setGroup(g === group ? '' : g)} />
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* 频道列表（容器可聚焦，↑↓/Enter 光标导航） */}
       <div
         ref={listRef}
@@ -405,22 +399,6 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
         )}
       </div>
     </div>
-  );
-}
-
-function GroupChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      className={cn(
-        'shrink-0 px-2.5 py-1 rounded-full text-xs whitespace-nowrap transition-colors border',
-        active
-          ? 'bg-accent text-on-accent border-accent'
-          : 'bg-chip text-muted border-line hover:text-content hover:bg-hover'
-      )}
-      onClick={onClick}
-    >
-      {label}
-    </button>
   );
 }
 
