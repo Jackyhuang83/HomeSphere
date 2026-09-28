@@ -12,7 +12,7 @@ VPS：1 vCPU / 1 GB RAM / 10 GB SSD / 10 Mbps
 
 服务器部署只需要在 SSH 中复制命令并按提示操作。
 
-> 说明：115 授权和 Media Bridge 的首次设置是上游程序提供的网页界面，因此这一步需要打开浏览器；但仍然不需要你编辑任何服务器文件。
+> 说明：115 授权和 Media Bridge（QMediaSync） 的首次设置是上游程序提供的网页界面，因此这一步需要打开浏览器；但仍然不需要你编辑任何服务器文件。
 
 ---
 
@@ -22,7 +22,7 @@ VPS：1 vCPU / 1 GB RAM / 10 GB SSD / 10 Mbps
 115
  │
  ▼
-Media Bridge
+Media Bridge（QMediaSync）
  ├─ 管理 115 授权
  ├─ 生成 STRM
  └─ 播放时返回 3xx
@@ -71,8 +71,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 - 下载 HomeSphere；
 - 创建所有目录；
 - 自动生成 HomeSphere 配置；
-- 拉取预构建的 HomeSphere 与 Media Bridge 镜像；
-- 启动 HomeSphere 与 Media Bridge；
+- 拉取预构建的 HomeSphere 与 Media Bridge（QMediaSync） 镜像；
+- 启动 HomeSphere 与 Media Bridge（QMediaSync）；
 - 清理不再使用的旧镜像。
 
 你不需要执行：
@@ -113,7 +113,7 @@ HomeSphere 仍然可以运行，只是暂时不会自动补齐 TMDB 海报和简
 
 ```text
 HomeSphere     127.0.0.1:8080
-Media Bridge   127.0.0.1:12333
+Media Bridge（QMediaSync）   127.0.0.1:12333
 ```
 
 两个端口都只监听 VPS 本机。
@@ -124,7 +124,7 @@ Media Bridge   127.0.0.1:12333
 
 ---
 
-## 4. 第一次进入 HomeSphere 和 Media Bridge
+## 4. 第一次进入 HomeSphere 和 Media Bridge（QMediaSync）
 
 在你自己的电脑终端执行：
 
@@ -144,7 +144,7 @@ HomeSphere：
 http://127.0.0.1:8080
 ```
 
-Media Bridge：
+Media Bridge（QMediaSync）：
 
 ```text
 http://127.0.0.1:12333
@@ -152,24 +152,28 @@ http://127.0.0.1:12333
 
 ---
 
-## 5. 第一次设置 Media Bridge
+## 5. 第一次设置 Media Bridge（QMediaSync）
 
-当前 HomeSphere 使用：
+当前 HomeSphere 的 Media Bridge（QMediaSync） 使用：\n\n```text\nqicfan/qmediasync:latest\n```
 
-```text
-qicfan/115strm
-```
-
-第一次进入 Media Bridge 后：
+第一次进入 Media Bridge（QMediaSync） 后：
 
 1. 按页面提示完成管理账号设置；
 2. 完成 115 开放平台授权；
-3. 只添加真正存放电影/电视剧的 115 目录；
+3. 只添加真正存放电影/电视剧的 115 目录；电影和电视剧分开建立同步目录；
 4. STRM 本地输出目录使用：
 
 ```text
 /media
 ```
+
+5. STRM 直连地址使用：
+
+```text
+http://media-bridge:12333
+```
+
+6. 关闭本地代理 / 115 下载链接代理、元数据上传下载、联动删除和 Emby 相关能力。
 
 例如 115 中真正的影视目录可能是：
 
@@ -198,7 +202,7 @@ qicfan/115strm
 
 ### 不需要开启的功能
 
-HomeSphere 只需要 Media Bridge：
+HomeSphere 只需要 Media Bridge（QMediaSync）：
 
 - 读取 115；
 - 生成 STRM；
@@ -218,7 +222,7 @@ HomeSphere 只需要 Media Bridge：
 
 ## 6. HomeSphere 建立片库
 
-Media Bridge 已经生成 STRM 后，浏览器打开：
+Media Bridge（QMediaSync） 已经生成 STRM 后，浏览器打开：
 
 ```text
 http://127.0.0.1:8080/setup
@@ -251,7 +255,7 @@ iPhone / iPad
 HomeSphere
     │
     ▼
-Media Bridge
+Media Bridge（QMediaSync）
     │
     └─ 返回 3xx
           │
@@ -380,7 +384,7 @@ HomeSphere 继续只监听：
 127.0.0.1:8080
 ```
 
-Media Bridge 继续只监听：
+Media Bridge（QMediaSync） 继续只监听：
 
 ```text
 127.0.0.1:12333
@@ -442,7 +446,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 脚本会自动：
 
 - 更新 HomeSphere；
-- 更新 HomeSphere 与 Media Bridge 镜像；
+- 更新 HomeSphere 与 Media Bridge（QMediaSync） 镜像；
 - 重启服务；
 - 保留已有密码、115 授权、SQLite 数据和 STRM；
 - 清理 Docker 构建缓存。
@@ -490,7 +494,7 @@ docker logs --tail 100 homesphere
 
 把完整输出发给我。
 
-### Media Bridge 有问题
+### Media Bridge（QMediaSync） 有问题
 
 执行：
 
@@ -555,7 +559,7 @@ VPS 中只保存：
 - HomeSphere 程序；
 - Docker 镜像；
 - SQLite；
-- Media Bridge 配置；
+- Media Bridge（QMediaSync） 配置；
 - 少量 STRM；
 - 少量缓存。
 
@@ -601,7 +605,7 @@ docker ps
 docker logs --tail 100 homesphere
 ```
 
-排查 Media Bridge：
+排查 Media Bridge（QMediaSync）：
 
 ```bash
 docker logs --tail 100 media-bridge
