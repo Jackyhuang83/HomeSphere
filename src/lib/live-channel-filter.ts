@@ -46,6 +46,7 @@ export interface KeywordMatchable {
   tvgId?: string;
   group?: string;
   country?: string;
+  rawName?: string;
 }
 
 /** 关键字匹配台名 / tvg-id / 分组名（三者都做分隔符归一化）；空关键字恒匹配 */
@@ -55,6 +56,51 @@ export function matchesKeyword(channel: KeywordMatchable, normalizedKeyword: str
   if (channel.tvgId && normalizeForSearch(channel.tvgId).includes(normalizedKeyword)) return true;
   if (channel.group && normalizeForSearch(channel.group).includes(normalizedKeyword)) return true;
   return false;
+}
+
+
+
+const TRADITIONAL_NORMALIZE_MAP: Array<[RegExp, string]> = [
+  [/臺/g, '台'],
+  [/衛視/g, '卫视'],
+  [/資訊/g, '资讯'],
+  [/鳳凰/g, '凤凰'],
+  [/東森/g, '东森'],
+  [/民視/g, '民视'],
+  [/華視/g, '华视'],
+  [/中視/g, '中视'],
+  [/公視/g, '公视'],
+  [/無綫/g, '无线'],
+];
+
+function normalizeChannelIdentityText(input: string): string {
+  let text = input.trim();
+  for (const [pattern, replacement] of TRADITIONAL_NORMALIZE_MAP) text = text.replace(pattern, replacement);
+  text = text
+    .replace(/[（(][^）)]*(?:2160p|1080p|720p|576p|4k|8k|uhd|fhd|hd|sd)[^）)]*[）)]/gi, '')
+    .replace(/(?:2160p|1080p|720p|576p|4k|8k|uhd|fhd|超高清|超清|高清|标清|藍光|蓝光)/gi, '')
+    .replace(/(?:直播)$/g, '')
+    .trim();
+  return normalizeForSearch(text);
+}
+
+/**
+ * 用于跨 M3U 合并同一频道的稳定键。
+ * CCTV 单独规整编号；其他频道基于名称去除画质/分隔符差异。
+ */
+export function canonicalLiveChannelKey(channel: KeywordMatchable): string {
+  const raw = channel.rawName || channel.name;
+  const normalized = normalizeChannelIdentityText(raw);
+  const cctv = normalized.match(/^cctv0?(\d{1,2})(\+)?/i);
+  if (cctv) return `cctv:${Number(cctv[1])}${cctv[2] ? '+' : ''}`;
+
+  const cleaned = normalized
+    .replace(/(?:频道|頻道)$/g, '')
+    .replace(/(?:电视台|電視台)$/g, '');
+
+  if (cleaned) return `name:${cleaned}`;
+  if (channel.tvgId) return `id:${normalizeForSearch(channel.tvgId)}`;
+  return `name:${normalizeForSearch(channel.name)}`;
 }
 
 /**
