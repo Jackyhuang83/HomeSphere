@@ -251,8 +251,10 @@ Client ─────────────► 直播源站
 - HLS / FLV / 原生媒体都由浏览器直接访问；
 - 直连失败时不会自动改走 VPS 或 Cloudflare Tunnel；
 - 可在设置中安装公共 M3U 主/备订阅；
-- 默认主源为 iptv-org Chinese 语言列表；
-- 备用源为 IPTV-CN Chinese 列表，默认安装但停用；
+- 默认启用 4 个中文公共 M3U：iptv-org Chinese、IPTV-CN Chinese、vbskycn IPTV4、hujingguang ChinaIPTV；
+- 同一频道按标准化名称合并成一个频道条目，内部保留多条候选播放线路；
+- HTTPS 线路优先，HTTP 线路后置；
+- 起播失败、超时、连续网络失败或解码失败时，仅在浏览器侧自动尝试下一条直连线路；
 - 外部 M3U 只作为频道发现与清单来源，不改变视频数据面边界；
 - HomeSphere 统一做频道智能分类，不依赖公共 M3U 自带的杂乱分组；
 - 分类优先级为 CCTV / 卫视 / 香港 / 台湾 / 地方，其余再按亚洲 / 欧洲 / 美洲 / 非洲 / 其他归类；
