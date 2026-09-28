@@ -128,3 +128,36 @@ export function sortChannels<T extends KeywordMatchable & { url: string }>(
   }
   return out;
 }
+
+
+export type ChineseChannelCategory = 'cctv' | 'satellite' | 'hongkong' | 'taiwan' | 'local' | 'other';
+
+export const CHINESE_CHANNEL_CATEGORIES: Array<{ id: ChineseChannelCategory; label: string }> = [
+  { id: 'cctv', label: 'CCTV' },
+  { id: 'satellite', label: '卫视' },
+  { id: 'hongkong', label: '香港' },
+  { id: 'taiwan', label: '台湾' },
+  { id: 'local', label: '地方' },
+  { id: 'other', label: '其他' },
+];
+
+const HONG_KONG_RE = /(香港|hong\s*kong|\bhk\b|tvb|無綫|无线|翡翠|明珠|鳳凰|凤凰|rthk|港台)/i;
+const TAIWAN_RE = /(台灣|台湾|taiwan|tvbs|民視|民视|三立|東森|东森|寰宇|中天|華視|华视|台視|台视|中視|中视|公視|公视|年代|非凡|鏡新聞|镜新闻|壹電視|壹电视|momo)/i;
+const CCTV_RE = /(cctv|央視|央视|中央電視台|中央电视台)/i;
+const SATELLITE_RE = /(衛視|卫视|satellite)/i;
+const LOCAL_REGION_RE = /(北京|上海|天津|重慶|重庆|河北|河南|山東|山东|山西|湖北|湖南|廣東|广东|廣西|广西|海南|浙江|江蘇|江苏|安徽|福建|江西|遼寧|辽宁|吉林|黑龍江|黑龙江|四川|貴州|贵州|雲南|云南|陝西|陕西|甘肅|甘肃|青海|寧夏|宁夏|新疆|西藏|內蒙古|内蒙古|深圳|廣州|广州|杭州|南京|蘇州|苏州|成都|武漢|武汉|長沙|长沙|廈門|厦门|大連|大连|青島|青岛|寧波|宁波|珠江|都市|地方|local|province|city)/i;
+
+/**
+ * 中文频道智能分类。
+ * 先按港澳台/CCTV/卫视等高置信规则分类，再把带省市/地方特征的频道归入“地方”。
+ * 原始 M3U group-title 只作为辅助文本，因此不同公共源的分组命名不会影响 HomeSphere UI。
+ */
+export function classifyChineseChannel(channel: KeywordMatchable): ChineseChannelCategory {
+  const text = `${channel.name} ${channel.group ?? ''} ${channel.tvgId ?? ''}`;
+  if (HONG_KONG_RE.test(text)) return 'hongkong';
+  if (TAIWAN_RE.test(text)) return 'taiwan';
+  if (CCTV_RE.test(text)) return 'cctv';
+  if (SATELLITE_RE.test(text)) return 'satellite';
+  if (LOCAL_REGION_RE.test(text)) return 'local';
+  return 'other';
+}
