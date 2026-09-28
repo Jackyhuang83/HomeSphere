@@ -336,11 +336,13 @@ strm_menu() {
 QMediaSync:   $(container_state media-bridge)
 镜像:         $(docker inspect -f '{{.Config.Image}}' media-bridge 2>/dev/null || printf '未创建')
 STRM 数量:    $(find "$APP_DIR/media" -type f -iname '*.strm' 2>/dev/null | wc -l | tr -d ' ')
+自动索引:      $(systemctl is-active homesphere-strm-sync.timer 2>/dev/null || printf '未启用')
 
 1. 首次配置说明
 2. 检查 STRM
-3. 重启 QMediaSync
-4. 查看 QMediaSync 日志
+3. 立即同步 HomeSphere STRM 索引
+4. 重启 QMediaSync
+5. 查看 QMediaSync 日志
 0. 返回
 EOF
     printf "\n请选择: "
@@ -349,11 +351,22 @@ EOF
       1) strm_setup_guide; pause ;;
       2) strm_check; pause ;;
       3)
+        clear
+        if bash "$APP_DIR/scripts/strm-index-sync.sh"; then
+          echo
+          echo "HomeSphere STRM 本地索引同步完成。"
+        else
+          echo
+          echo "同步失败，请查看 HomeSphere 日志。"
+        fi
+        pause
+        ;;
+      4)
         docker compose "${COMPOSE_FILES[@]}" restart media-bridge
         docker compose "${COMPOSE_FILES[@]}" ps media-bridge
         pause
         ;;
-      4)
+      5)
         clear
         docker logs --tail 160 media-bridge 2>&1 || true
         pause
