@@ -49,6 +49,8 @@ show_status() {
   printf "版本:           %s\n" "$(version)"
   printf "HomeSphere:     %s\n" "$(container_state homesphere)"
   printf "Media Bridge:   %s\n" "$(container_state media-bridge)"
+  printf "Bridge 镜像:    %s\n" "$(docker inspect -f '{{.Config.Image}}' media-bridge 2>/dev/null || printf '未创建')"
+  printf "STRM 数量:      %s\n" "$(find "$APP_DIR/media" -type f -iname '*.strm' 2>/dev/null | wc -l | tr -d ' ')"
   printf "TMDB:           %s\n" "$(tmdb_state)"
   printf "Cloudflare:     %s\n" "$(tunnel_state)"
   echo
@@ -246,6 +248,122 @@ playback_safety_check() {
   echo "说明：115 STRM 点播必须 302 到最终 CDN；M3U 直播必须 Direct-only。"
 }
 
+
+strm_check() {
+  clear
+  echo "115 / STRM 检查"
+  echo "=============="
+  echo
+  local total=0 checked=0 invalid=0 sample=""
+  total="$(find "$APP_DIR/media" -type f -iname '*.strm' 2>/dev/null | wc -l | tr -d ' ')"
+  echo "STRM 总数: ${total:-0}"
+  echo "共享目录:  $APP_DIR/media -> /media"
+  echo
+  if [ "${total:-0}" -eq 0 ]; then
+    echo "当前还没有 STRM。请先在 QMediaSync 中完成 115 授权并同步一个小目录。"
+    return
+  fi
+
+  while IFS= read -r -d '' file; do
+    sample="$(awk 'NF { gsub(/\r/,""); print; exit }' "$file" 2>/dev/null || true)"
+    checked=$((checked+1))
+    if ! printf '%s\n' "$sample" | grep -Eq '^https?://media-bridge:12333/'; then
+      invalid=$((invalid+1))
+      if [ "$invalid" -le 5 ]; then
+        echo "[异常] ${file#$APP_DIR/media/}"
+        echo "       ${sample:-空文件}"
+      fi
+    fi
+    [ "$checked" -ge 100 ] && break
+  done < <(find "$APP_DIR/media" -type f -iname '*.strm' -print0 2>/dev/null)
+
+  echo
+  if [ "$invalid" -eq 0 ]; then
+    echo "[通过] 抽检 $checked 个 STRM，均指向 http(s)://media-bridge:12333/"
+    echo "下一步：进入 HomeSphere → 片库 → 同步STRM → 测试播放链路。"
+  else
+    echo "[失败] 抽检 $checked 个 STRM，其中 $invalid 个没有指向 HomeSphere 内网 Bridge。"
+    echo "请在 QMediaSync 的同步目录中把 STRM 直连地址设置为：http://media-bridge:12333"
+  fi
+}
+
+strm_setup_guide() {
+  clear
+  cat <<'EOF'
+QMediaSync / 115 首次配置
+========================
+
+1. 在你自己的 Mac 终端建立管理隧道：
+
+   ssh -L 12333:127.0.0.1:12333 root@你的VPS_IP
+
+2. 浏览器打开：
+
+   http://127.0.0.1:12333
+
+3. QMediaSync 中只做这几件事：
+
+   - 完成 115 OAuth 授权；
+   - 只添加真实媒体目录，不要扫描 115 根目录；
+   - 电影、电视剧分开建同步目录；
+   - STRM 本地根目录使用：/media
+   - STRM 直连地址使用：http://media-bridge:12333
+   - 本地代理 / 115 下载链接代理：关闭
+   - 元数据下载：关闭
+   - 元数据上传：关闭
+   - 联动删除网盘文件：关闭
+   - 不配置 Emby / Jellyfin / Plex；
+   - 定时同步建议：每 6 小时一次。
+
+4. 第一次不要同步整个 50TB。
+   先选一个很小的电影目录，生成少量 STRM，验证播放链路。
+
+正确播放路径：
+
+   HomeSphere -> QMediaSync 12333 -> 302 -> 115 CDN
+                                      |
+                                      +-> 视频字节不经过 VPS
+
+EOF
+}
+
+strm_menu() {
+  while true; do
+    clear
+    cat <<EOF
+115 / STRM
+
+QMediaSync:   $(container_state media-bridge)
+镜像:         $(docker inspect -f '{{.Config.Image}}' media-bridge 2>/dev/null || printf '未创建')
+STRM 数量:    $(find "$APP_DIR/media" -type f -iname '*.strm' 2>/dev/null | wc -l | tr -d ' ')
+
+1. 首次配置说明
+2. 检查 STRM
+3. 重启 QMediaSync
+4. 查看 QMediaSync 日志
+0. 返回
+EOF
+    printf "\n请选择: "
+    read -r choice
+    case "$choice" in
+      1) strm_setup_guide; pause ;;
+      2) strm_check; pause ;;
+      3)
+        docker compose "${COMPOSE_FILES[@]}" restart media-bridge
+        docker compose "${COMPOSE_FILES[@]}" ps media-bridge
+        pause
+        ;;
+      4)
+        clear
+        docker logs --tail 160 media-bridge 2>&1 || true
+        pause
+        ;;
+      0) return ;;
+      *) ;;
+    esac
+  done
+}
+
 logs_menu() {
   while true; do
     clear
@@ -346,6 +464,7 @@ HomeSphere $(version)
 9. 查看日志
 10. 系统资源
 11. 播放链路安全自检
+12. 115 / STRM
 0. 退出
 EOF
 
@@ -364,6 +483,7 @@ EOF
     9) logs_menu ;;
     10) show_resources; pause ;;
     11) playback_safety_check; pause ;;
+    12) strm_menu ;;
     0) exit 0 ;;
     *) ;;
   esac
