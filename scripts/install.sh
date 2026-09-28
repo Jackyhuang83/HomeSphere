@@ -145,7 +145,14 @@ fi
 if ! grep -q '^QMS_POSTGRES_USER=' .env; then
   printf 'QMS_POSTGRES_USER=qmediasync\n' >> .env
 fi
-if ! grep -Eq '^QMS_POSTGRES_PASSWORD=.+
+if ! grep -Eq '^QMS_POSTGRES_PASSWORD=.+$' .env; then
+  sed -i '/^QMS_POSTGRES_PASSWORD=/d' .env
+  QMS_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+  printf 'QMS_POSTGRES_PASSWORD=%s\n' "$QMS_POSTGRES_PASSWORD" >> .env
+fi
+chmod 600 .env
+
+say "拉取 HomeSphere 镜像"
 docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
 
 say "拉取 Media Bridge 镜像"
@@ -225,84 +232,6 @@ if [ -f .env ]; then
     echo
   fi
 
-  CURRENT_PASSWORD="$(grep '^PASSWORD=' .env | head -n1 || true)"
-  CURRENT_PASSWORD="${CURRENT_PASSWORD#PASSWORD=}"
-  if [[ "$CURRENT_PASSWORD" == \'*\' ]] || [[ "$CURRENT_PASSWORD" == \"*\" ]]; then
-    CURRENT_PASSWORD="${CURRENT_PASSWORD:1:${#CURRENT_PASSWORD}-2}"
-  fi
-  if [ -n "$CURRENT_PASSWORD" ]; then
-    echo
-    echo "HomeSphere 当前家庭访问密码："
-    echo
-    echo "    $CURRENT_PASSWORD"
-    echo
-  fi
-fi
- .env; then
-  sed -i '/^QMS_POSTGRES_PASSWORD=/d' .env
-  QMS_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
-  printf 'QMS_POSTGRES_PASSWORD=%s\n' "$QMS_POSTGRES_PASSWORD" >> .env
-fi
-chmod 600 .env
-
-say "拉取 HomeSphere 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
-
-say "拉取 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。请检查 VPS 网络后重试。"
-
-say "启动 HomeSphere 与 Media Bridge"
-docker compose "${COMPOSE_FILES[@]}" up -d
-
-say "配置低频 STRM 本地索引"
-bash "$APP_DIR/scripts/install-strm-timer.sh"
-
-# 清理更新后不再使用的旧镜像，避免 10GB VPS 长期堆积。
-docker image prune -f >/dev/null 2>&1 || true
-
-say "部署结果"
-docker compose "${COMPOSE_FILES[@]}" ps
-
-cat <<'EOF'
-
-安装完成。
-
-为了安全，HomeSphere 的 8080 和 Media Bridge 的 12333 都只监听 VPS 本机，
-不会直接暴露到公网。
-
-下一步有两种访问方式：
-
-1. 先自己测试：
-   在你自己的电脑终端执行：
-   ssh -L 8080:127.0.0.1:8080 -L 12333:127.0.0.1:12333 root@你的VPS_IP
-
-   然后浏览器打开：
-   HomeSphere:   http://127.0.0.1:8080
-   Media Bridge: http://127.0.0.1:12333
-
-2. 准备给家人/朋友长期使用：
-   使用 Cloudflare Tunnel 提供 HTTPS，不需要把域名直接解析到 VPS，也不需要开放 80/443。
-   先在 Cloudflare 创建 Remotely-managed Tunnel，并把 Public Hostname 的 Service 指向：
-   http://127.0.0.1:8080
-
-   然后在 SSH 中运行：
-   bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
-
-请按 Media Bridge 页面提示完成首次设置和 115 授权。
-
-HomeSphere 家庭密码忘记后，不需要找配置文件。
-SSH 登录 VPS 后运行：
-bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
-
-即可查看当前密码、生成新的随机密码或设置自己的密码。
-
-以后 SSH 登录 VPS 后，直接运行：
-homesphere
-
-即可进入统一管理界面。
-EOF
-
-if [ -f .env ]; then
   CURRENT_PASSWORD="$(grep '^PASSWORD=' .env | head -n1 || true)"
   CURRENT_PASSWORD="${CURRENT_PASSWORD#PASSWORD=}"
   if [[ "$CURRENT_PASSWORD" == \'*\' ]] || [[ "$CURRENT_PASSWORD" == \"*\" ]]; then
