@@ -40,7 +40,7 @@ export function LiveSourceManager() {
       if (filter === 'enabled' && !enabled) return false;
       if (filter === 'disabled' && enabled) return false;
       if (filter === 'preset' && !row.preset) return false;
-      if (filter === 'public' && !('publicPreset' in row && row.publicPreset)) return false;
+      if (filter === 'public' && !publicLiveSourceByUrl(row.url)) return false;
       if (filter === 'manual' && row.preset) return false;
       return !q || row.name.toLowerCase().includes(q) || row.url.toLowerCase().includes(q);
     });
@@ -116,6 +116,7 @@ export function LiveSourceManager() {
           <ul className="space-y-2">
             {rows.map((row) => {
               const enabled = store.liveSelectedUrls.includes(row.url);
+              const publicPreset = publicLiveSourceByUrl(row.url);
               return (
                 <li key={row.url} className={cn('bg-card rounded-lg p-3', !enabled && 'opacity-70')}>
                   <div className="flex items-center gap-2">
@@ -124,8 +125,8 @@ export function LiveSourceManager() {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-content truncate">
                         {row.name}
-                        {('publicPreset' in row && row.publicPreset) ? (
-                          <span className="ml-1.5 text-[10px] text-faint">{row.publicPreset.role === 'primary' ? '公共主源' : '公共备用'}</span>
+                        {publicPreset ? (
+                          <span className="ml-1.5 text-[10px] text-faint">{publicPreset.role === 'primary' ? '公共主源' : '公共备用'}</span>
                         ) : row.preset ? (
                           <span className="ml-1.5 text-[10px] text-faint">预置</span>
                         ) : null}
