@@ -64,13 +64,9 @@ export function LiveSourceManager() {
       const exists = state.liveSubscriptions.some((item) => item.url === source.url);
       if (!exists) {
         state.addLiveSubscription(source.url, source.name);
-        if (source.role === 'backup') {
-          const next = useAppStore.getState();
-          if (next.liveSelectedUrls.includes(source.url)) next.toggleLiveSelected(source.url);
-        }
       }
     }
-    toast('中文 M3U 双源已安装：主源启用，备用源默认停用', 'success');
+    toast('中文 M3U 四源已安装并启用，可用于同频道多线路自动切换', 'success');
   };
 
   return (
@@ -126,7 +122,7 @@ export function LiveSourceManager() {
                       <div className="text-sm font-medium text-content truncate">
                         {row.name}
                         {publicPreset ? (
-                          <span className="ml-1.5 text-[10px] text-faint">{publicPreset.role === 'primary' ? '公共主源' : '公共备用'}</span>
+                          <span className="ml-1.5 text-[10px] text-faint">公共线路 {publicPreset.priority}</span>
                         ) : row.preset ? (
                           <span className="ml-1.5 text-[10px] text-faint">预置</span>
                         ) : null}
