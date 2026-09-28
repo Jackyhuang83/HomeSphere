@@ -101,7 +101,7 @@ export const useAppStore = create<AppState>()(
       },
 
       ensurePublicLiveSources: () => {
-        if (get().livePublicPresetVersion >= 2) return;
+        if (get().livePublicPresetVersion >= 3) return;
 
         const legacy = new Set<string>(LEGACY_PUBLIC_LIVE_SOURCE_URLS);
         const currentSubscriptions = get().liveSubscriptions.filter((item) => !legacy.has(item.url));
@@ -114,19 +114,14 @@ export const useAppStore = create<AppState>()(
           }
         }
 
-        const primaryUrls = PUBLIC_LIVE_SOURCES
-          .filter((source) => source.role === 'primary')
-          .map((source) => source.url);
-        const backupUrls = new Set(
-          PUBLIC_LIVE_SOURCES.filter((source) => source.role === 'backup').map((source) => source.url)
-        );
+        const publicUrls = PUBLIC_LIVE_SOURCES.map((source) => source.url);
 
         set({
           liveSubscriptions: nextSubscriptions,
-          liveSelectedUrls: [
-            ...new Set([...currentSelected.filter((url) => !backupUrls.has(url)), ...primaryUrls]),
-          ],
-          livePublicPresetVersion: 2,
+          // 四个公共中文源在本次迁移中一次性启用，供同频道多线路聚合/自动切换使用。
+          // 之后用户若手动停用某个源，不会被刷新重新开启（迁移只执行一次）。
+          liveSelectedUrls: [...new Set([...currentSelected, ...publicUrls])],
+          livePublicPresetVersion: 3,
         });
       },
 
