@@ -17,7 +17,19 @@ export interface StrmSyncSummary {
   finishedAt:number;
 }
 
+let syncRunning=false;
+
 export async function syncStrmLibrary(signal?:AbortSignal):Promise<StrmSyncSummary> {
+  if(syncRunning) throw new Error('STRM 片库同步正在运行');
+  syncRunning=true;
+  try{
+    return await syncStrmLibraryUnlocked(signal);
+  }finally{
+    syncRunning=false;
+  }
+}
+
+async function syncStrmLibraryUnlocked(signal?:AbortSignal):Promise<StrmSyncSummary> {
   const root=strmRoot();
   const rootStat=await stat(root).catch(()=>null);
   if(!rootStat?.isDirectory()) throw new Error(`STRM 目录不存在：${root}`);
