@@ -206,6 +206,14 @@ playback_safety_check() {
     warned=$((warned+1))
   fi
 
+  if [ ! -f "$APP_DIR/src/app/api/live/stream/[url]/route.ts" ] \
+    && ! grep -q "/api/live/stream/" "$APP_DIR/src/components/live-player.tsx" 2>/dev/null; then
+    echo "[通过] 直播为 Direct-only，服务端视频代理端点不存在"
+  else
+    echo "[失败] 检测到直播服务端代理能力，可能导致视频字节经过 VPS / Cloudflare"
+    failed=$((failed+1))
+  fi
+
   if systemctl is-active --quiet "$TUNNEL_SERVICE" 2>/dev/null; then
     domain="$(sed -n "s/^HOMESPHERE_DOMAIN='\(.*\)'/\1/p" /etc/homesphere/cloudflared.env 2>/dev/null | head -n1)"
     if [ -n "$domain" ]; then
@@ -235,7 +243,7 @@ playback_safety_check() {
   fi
 
   echo
-  echo "说明：此检查针对 115 STRM 点播链路；自定义 M3U 直播是独立链路。"
+  echo "说明：115 STRM 点播必须 302 到最终 CDN；M3U 直播必须 Direct-only。"
 }
 
 logs_menu() {
