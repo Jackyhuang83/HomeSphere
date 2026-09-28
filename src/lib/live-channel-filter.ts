@@ -45,6 +45,7 @@ export interface KeywordMatchable {
   name: string;
   tvgId?: string;
   group?: string;
+  country?: string;
 }
 
 /** 关键字匹配台名 / tvg-id / 分组名（三者都做分隔符归一化）；空关键字恒匹配 */
@@ -130,7 +131,17 @@ export function sortChannels<T extends KeywordMatchable & { url: string }>(
 }
 
 
-export type ChineseChannelCategory = 'cctv' | 'satellite' | 'hongkong' | 'taiwan' | 'local' | 'other';
+export type ChineseChannelCategory =
+  | 'cctv'
+  | 'satellite'
+  | 'hongkong'
+  | 'taiwan'
+  | 'local'
+  | 'asia'
+  | 'europe'
+  | 'americas'
+  | 'africa'
+  | 'other';
 
 export const CHINESE_CHANNEL_CATEGORIES: Array<{ id: ChineseChannelCategory; label: string }> = [
   { id: 'cctv', label: 'CCTV' },
@@ -138,6 +149,10 @@ export const CHINESE_CHANNEL_CATEGORIES: Array<{ id: ChineseChannelCategory; lab
   { id: 'hongkong', label: '香港' },
   { id: 'taiwan', label: '台湾' },
   { id: 'local', label: '地方' },
+  { id: 'asia', label: '亚洲' },
+  { id: 'europe', label: '欧洲' },
+  { id: 'americas', label: '美洲' },
+  { id: 'africa', label: '非洲' },
   { id: 'other', label: '其他' },
 ];
 
@@ -146,6 +161,59 @@ const TAIWAN_RE = /(台灣|台湾|taiwan|tvbs|民視|民视|三立|東森|东森
 const CCTV_RE = /(cctv|央視|央视|中央電視台|中央电视台)/i;
 const SATELLITE_RE = /(衛視|卫视|satellite)/i;
 const LOCAL_REGION_RE = /(北京|上海|天津|重慶|重庆|河北|河南|山東|山东|山西|湖北|湖南|廣東|广东|廣西|广西|海南|浙江|江蘇|江苏|安徽|福建|江西|遼寧|辽宁|吉林|黑龍江|黑龙江|四川|貴州|贵州|雲南|云南|陝西|陕西|甘肅|甘肃|青海|寧夏|宁夏|新疆|西藏|內蒙古|内蒙古|深圳|廣州|广州|杭州|南京|蘇州|苏州|成都|武漢|武汉|長沙|长沙|廈門|厦门|大連|大连|青島|青岛|寧波|宁波|珠江|都市|地方|local|province|city)/i;
+
+
+const ASIA_CODES = new Set([
+  'AF','AM','AZ','BH','BD','BT','BN','KH','CN','GE','HK','IN','ID','IR','IQ','IL','JP','JO','KZ','KW','KG',
+  'LA','LB','MO','MY','MV','MN','MM','NP','KP','OM','PK','PS','PH','QA','SA','SG','KR','LK','SY','TW','TJ',
+  'TH','TL','TM','TR','AE','UZ','VN','YE',
+]);
+const EUROPE_CODES = new Set([
+  'AL','AD','AT','BY','BE','BA','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IS','IE','IT','XK',
+  'LV','LI','LT','LU','MT','MD','MC','ME','NL','MK','NO','PL','PT','RO','RU','SM','RS','SK','SI','ES','SE',
+  'CH','UA','GB','VA',
+]);
+const AMERICAS_CODES = new Set([
+  'AG','AR','BS','BB','BZ','BO','BR','CA','CL','CO','CR','CU','DM','DO','EC','SV','GD','GT','GY','HT','HN',
+  'JM','MX','NI','PA','PY','PE','KN','LC','VC','SR','TT','US','UY','VE','PR','GF',
+]);
+const AFRICA_CODES = new Set([
+  'DZ','AO','BJ','BW','BF','BI','CV','CM','CF','TD','KM','CD','CG','CI','DJ','EG','GQ','ER','SZ','ET','GA',
+  'GM','GH','GN','GW','KE','LS','LR','LY','MG','MW','ML','MR','MU','MA','MZ','NA','NE','NG','RW','ST','SN',
+  'SC','SL','SO','ZA','SS','SD','TZ','TG','TN','UG','ZM','ZW','EH',
+]);
+
+const ASIA_NAME_RE = /(日本|韓國|韩国|朝鮮|朝鲜|新加坡|馬來西亞|马来西亚|泰國|泰国|越南|菲律賓|菲律宾|印尼|印度尼西亞|印度尼西亚|柬埔寨|緬甸|缅甸|印度|巴基斯坦|孟加拉|尼泊爾|尼泊尔|蒙古|哈薩克|哈萨克|烏茲別克|乌兹别克|土耳其|以色列|阿聯酋|阿联酋|沙特|卡塔爾|卡塔尔|伊朗|伊拉克)/i;
+const EUROPE_NAME_RE = /(英國|英国|法國|法国|德國|德国|意大利|義大利|西班牙|葡萄牙|荷蘭|荷兰|比利時|比利时|瑞士|奧地利|奥地利|瑞典|挪威|芬蘭|芬兰|丹麥|丹麦|冰島|冰岛|愛爾蘭|爱尔兰|波蘭|波兰|捷克|斯洛伐克|匈牙利|羅馬尼亞|罗马尼亚|保加利亞|保加利亚|希臘|希腊|烏克蘭|乌克兰|白俄羅斯|白俄罗斯|俄羅斯|俄罗斯|塞爾維亞|塞尔维亚|克羅地亞|克罗地亚)/i;
+const AMERICAS_NAME_RE = /(美國|美国|加拿大|墨西哥|巴西|阿根廷|智利|哥倫比亞|哥伦比亚|秘魯|秘鲁|委內瑞拉|委内瑞拉|厄瓜多爾|厄瓜多尔|玻利維亞|玻利维亚|烏拉圭|乌拉圭|巴拉圭|古巴|多米尼加|牙買加|牙买加)/i;
+const AFRICA_NAME_RE = /(南非|埃及|摩洛哥|阿爾及利亞|阿尔及利亚|突尼斯|利比亞|利比亚|尼日利亞|尼日利亚|加納|加纳|肯尼亞|肯尼亚|烏干達|乌干达|坦桑尼亞|坦桑尼亚|埃塞俄比亞|埃塞俄比亚|喀麥隆|喀麦隆|塞內加爾|塞内加尔|安哥拉|莫桑比克|贊比亞|赞比亚|津巴布韋|津巴布韦)/i;
+
+function countryCodesOf(channel: KeywordMatchable): string[] {
+  const direct = (channel.country ?? '')
+    .split(/[;,]/)
+    .map((code) => code.trim().toUpperCase())
+    .filter(Boolean);
+  if (direct.length > 0) return direct;
+
+  const id = channel.tvgId ?? '';
+  const m = id.match(/\.([a-z]{2})(?:@[^.]*)?$/i);
+  return m ? [m[1].toUpperCase()] : [];
+}
+
+function classifyContinent(channel: KeywordMatchable): ChineseChannelCategory | undefined {
+  const codes = countryCodesOf(channel);
+  if (codes.some((code) => ASIA_CODES.has(code))) return 'asia';
+  if (codes.some((code) => EUROPE_CODES.has(code))) return 'europe';
+  if (codes.some((code) => AMERICAS_CODES.has(code))) return 'americas';
+  if (codes.some((code) => AFRICA_CODES.has(code))) return 'africa';
+
+  const text = `${channel.name} ${channel.group ?? ''} ${channel.tvgId ?? ''}`;
+  if (ASIA_NAME_RE.test(text)) return 'asia';
+  if (EUROPE_NAME_RE.test(text)) return 'europe';
+  if (AMERICAS_NAME_RE.test(text)) return 'americas';
+  if (AFRICA_NAME_RE.test(text)) return 'africa';
+  return undefined;
+}
 
 /**
  * 中文频道智能分类。
@@ -159,5 +227,5 @@ export function classifyChineseChannel(channel: KeywordMatchable): ChineseChanne
   if (CCTV_RE.test(text)) return 'cctv';
   if (SATELLITE_RE.test(text)) return 'satellite';
   if (LOCAL_REGION_RE.test(text)) return 'local';
-  return 'other';
+  return classifyContinent(channel) ?? 'other';
 }
