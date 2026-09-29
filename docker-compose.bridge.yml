@@ -4,7 +4,11 @@ services:
       - media-bridge
 
   media-bridge:
-    # 冻结的 QMediaSync v0.14.23；镜像已复制到 HomeSphere 自有 GHCR，并按 digest 固定。\n    image: ${QMS_IMAGE:-ghcr.io/jackyhuang83/homesphere@sha256:b4ddec6e3608336d814475fc899a8c07d3485955d111c0ae8cd00ae72bb9e2b1}
+    # 冻结的 QMediaSync v0.14.23。
+    # 安装/更新脚本保证本地镜像 homesphere-qms:v0.14.23-frozen 存在，
+    # 因此运行时不依赖 qicfan/qmediasync 仓库或 Docker Hub 持续可用。
+    image: ${QMS_IMAGE:-homesphere-qms:v0.14.23-frozen}
+    pull_policy: never
     container_name: media-bridge
     restart: unless-stopped
     stop_grace_period: 30s
