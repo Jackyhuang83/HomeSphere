@@ -77,7 +77,7 @@ export async function resolve115HlsPlaybackTarget(
   const streams=(root.video_url||[]).filter(item=>typeof item.url==='string'&&item.url.length>0);
   if(!streams.length) throw new Error('115 播放接口没有返回 HLS 地址');
 
-  const selected=[...streams].sort((a,b)=>streamScore(b)-streamScore(a))[0];
+  const selected=selectBrowserCompatibleStream(streams);
   const masterUrl=new URL(selected.url!);
   ensureHttp(masterUrl);
   await ensurePublic(masterUrl,'115 主播放清单');
@@ -150,9 +150,21 @@ function findVariantPlaylist(text:string,base:URL):URL|undefined{
   return undefined;
 }
 
+function selectBrowserCompatibleStream(streams:V115VideoUrl[]):V115VideoUrl{
+  // 115 的 definition=100 是原画。网页端优先使用 115 转码流：
+  // 转码流通常包含更适合 HLS / 移动浏览器的音视频轨道。
+  // 只有完全没有转码流时，才退回原画。
+  const transcoded=streams.filter(item=>item.definition!==100);
+  const candidates=transcoded.length?transcoded:streams;
+  return [...candidates].sort((a,b)=>streamScore(b)-streamScore(a))[0];
+}
+
 function streamScore(item:V115VideoUrl):number{
-  if(item.definition===100) return Number.MAX_SAFE_INTEGER;
   return Math.max(0,item.width||0)*Math.max(0,item.height||0)*1000+Math.max(0,item.definition||0);
+}
+
+export function __select115StreamForTest(streams:V115VideoUrl[]):V115VideoUrl{
+  return selectBrowserCompatibleStream(streams);
 }
 
 async function ensurePublic(url:URL,label:string):Promise<void>{
