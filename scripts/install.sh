@@ -13,6 +13,7 @@ fail() { printf '\n[错误] %s\n' "$*" >&2; exit 1; }
 if [ ! -f /etc/os-release ]; then
   fail "无法识别系统。当前一键安装仅支持 Debian/Ubuntu。"
 fi
+
 . /etc/os-release
 case "${ID:-}" in
   debian|ubuntu) ;;
@@ -27,6 +28,7 @@ if ! command -v docker >/dev/null 2>&1; then
   say "安装 Docker"
   curl -fsSL https://get.docker.com | sh
 fi
+
 systemctl enable --now docker >/dev/null 2>&1 || true
 docker compose version >/dev/null 2>&1 || fail "Docker Compose 不可用，请把报错发给我。"
 
@@ -63,6 +65,7 @@ cd "$APP_DIR"
 mkdir -p bridge-config media
 chmod 700 bridge-config
 chmod +x scripts/*.sh 2>/dev/null || true
+
 cat > /usr/local/bin/homesphere <<'EOF'
 #!/usr/bin/env bash
 exec bash /opt/homesphere/scripts/manage.sh "$@"
@@ -72,6 +75,7 @@ chmod 755 /usr/local/bin/homesphere
 if [ ! -f .env ]; then
   say "设置家庭登录密码"
   RANDOM_PASSWORD="$(openssl rand -hex 16)"
+
   echo "系统已自动生成安全随机密码："
   echo
   echo "    $RANDOM_PASSWORD"
@@ -100,6 +104,7 @@ if [ ! -f .env ]; then
 
   echo
   read -r -p "TMDB API Read Access Token（没有就直接回车，之后也能再配置）： " TMDB_TOKEN
+
   SESSION_SECRET="$(openssl rand -hex 32)"
   QMS_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
   QMS_API_KEY="qms_$(openssl rand -hex 12)"
@@ -120,6 +125,11 @@ HOMESPHERE_BRIDGE_MAX_REDIRECTS=3
 HOMESPHERE_BRIDGE_MIN_INTERVAL_MS=1000
 HOMESPHERE_BRIDGE_CACHE_TTL_MS=60000
 HOMESPHERE_BRIDGE_CIRCUIT_MS=60000
+
+HOMESPHERE_HLS_TIMEOUT_MS=12000
+HOMESPHERE_HLS_MIN_INTERVAL_MS=1000
+HOMESPHERE_HLS_CACHE_TTL_MS=60000
+
 HOMESPHERE_SYNC_MAX_ENTRIES=30000
 HOMESPHERE_SYNC_MAX_DIRS=5000
 
@@ -134,20 +144,33 @@ REQUEST_TIMEOUT=8000
 MAX_RETRIES=1
 DEBUG=false
 EOF
+
   chmod 600 .env
 else
   echo "检测到已有 .env，保留现有账号配置。"
 fi
 
-# 兼容旧版安装：已有 .env 时自动补齐 QMediaSync PostgreSQL 配置，
-# 只在缺失时生成密码，绝不覆盖现有数据库密码。
 if ! grep -q '^QMS_POSTGRES_DB=' .env; then
   printf '\nQMS_POSTGRES_DB=qmediasync\n' >> .env
 fi
+
 if ! grep -q '^QMS_POSTGRES_USER=' .env; then
   printf 'QMS_POSTGRES_USER=qmediasync\n' >> .env
 fi
-if ! grep -Eq '^QMS_POSTGRES_PASSWORD=.+
+
+if ! grep -Eq '^QMS_POSTGRES_PASSWORD=.+$' .env; then
+  sed -i '/^QMS_POSTGRES_PASSWORD=/d' .env
+  QMS_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+  printf 'QMS_POSTGRES_PASSWORD=%s\n' "$QMS_POSTGRES_PASSWORD" >> .env
+fi
+
+if ! grep -Eq '^QMS_API_KEY=.+$' .env; then
+  sed -i '/^QMS_API_KEY=/d' .env
+  QMS_API_KEY="qms_$(openssl rand -hex 12)"
+  printf 'QMS_API_KEY=%s\n' "$QMS_API_KEY" >> .env
+fi
+
+chmod 600 .env
 
 say "拉取 HomeSphere 镜像"
 docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
@@ -167,7 +190,6 @@ bash "$APP_DIR/scripts/ensure-qms-api-key.sh"
 say "配置低频 STRM 本地索引"
 bash "$APP_DIR/scripts/install-strm-timer.sh"
 
-# 清理更新后不再使用的旧镜像，避免 10GB VPS 长期堆积。
 docker image prune -f >/dev/null 2>&1 || true
 
 say "部署结果"
@@ -237,206 +259,7 @@ if [ -f .env ]; then
   if [[ "$CURRENT_PASSWORD" == \'*\' ]] || [[ "$CURRENT_PASSWORD" == \"*\" ]]; then
     CURRENT_PASSWORD="${CURRENT_PASSWORD:1:${#CURRENT_PASSWORD}-2}"
   fi
-  if [ -n "$CURRENT_PASSWORD" ]; then
-    echo
-    echo "HomeSphere 当前家庭访问密码："
-    echo
-    echo "    $CURRENT_PASSWORD"
-    echo
-  fi
-fi
- .env; then
-  sed -i '/^QMS_POSTGRES_PASSWORD=/d' .env
-  QMS_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
-  printf 'QMS_POSTGRES_PASSWORD=%s\n' "$QMS_POSTGRES_PASSWORD" >> .env
-fi
-if ! grep -Eq '^QMS_API_KEY=.+
 
-say "拉取 HomeSphere 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
-
-say "拉取 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。请检查 VPS 网络后重试。"
-
-say "拉取 QMediaSync PostgreSQL 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull qms-postgres || fail "PostgreSQL 镜像下载失败。请检查 VPS 网络后重试。"
-
-say "启动 HomeSphere、Media Bridge 与 PostgreSQL"
-docker compose "${COMPOSE_FILES[@]}" up -d
-
-say "配置低频 STRM 本地索引"
-bash "$APP_DIR/scripts/install-strm-timer.sh"
-
-# 清理更新后不再使用的旧镜像，避免 10GB VPS 长期堆积。
-docker image prune -f >/dev/null 2>&1 || true
-
-say "部署结果"
-docker compose "${COMPOSE_FILES[@]}" ps
-
-cat <<'EOF'
-
-安装完成。
-
-为了安全，HomeSphere 的 8080 和 Media Bridge 的 12333 都只监听 VPS 本机，
-不会直接暴露到公网。
-
-下一步有两种访问方式：
-
-1. 先自己测试：
-   在你自己的电脑终端执行：
-   ssh -L 8080:127.0.0.1:8080 -L 12333:127.0.0.1:12333 root@你的VPS_IP
-
-   然后浏览器打开：
-   HomeSphere:   http://127.0.0.1:8080
-   Media Bridge: http://127.0.0.1:12333
-
-2. 准备给家人/朋友长期使用：
-   使用 Cloudflare Tunnel 提供 HTTPS，不需要把域名直接解析到 VPS，也不需要开放 80/443。
-   先在 Cloudflare 创建 Remotely-managed Tunnel，并把 Public Hostname 的 Service 指向：
-   http://127.0.0.1:8080
-
-   然后在 SSH 中运行：
-   bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
-
-请按 Media Bridge 页面提示完成首次设置和 115 授权。
-QMediaSync 数据库请选择 PostgreSQL，并填写：
-  主机：qms-postgres
-  端口：5432
-  数据库：qmediasync
-  用户名：qmediasync
-数据库密码会在安装完成后的 SSH 输出中显示。
-
-HomeSphere 家庭密码忘记后，不需要找配置文件。
-SSH 登录 VPS 后运行：
-bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
-
-即可查看当前密码、生成新的随机密码或设置自己的密码。
-
-以后 SSH 登录 VPS 后，直接运行：
-homesphere
-
-即可进入统一管理界面。
-EOF
-
-if [ -f .env ]; then
-  QMS_DB_PASSWORD="$(sed -n 's/^QMS_POSTGRES_PASSWORD=//p' .env | head -n1)"
-  if [ -n "$QMS_DB_PASSWORD" ]; then
-    echo
-    echo "QMediaSync PostgreSQL 连接信息："
-    echo
-    echo "    主机：qms-postgres"
-    echo "    端口：5432"
-    echo "    数据库：qmediasync"
-    echo "    用户名：qmediasync"
-    echo "    密码：$QMS_DB_PASSWORD"
-    echo
-  fi
-
-  CURRENT_PASSWORD="$(grep '^PASSWORD=' .env | head -n1 || true)"
-  CURRENT_PASSWORD="${CURRENT_PASSWORD#PASSWORD=}"
-  if [[ "$CURRENT_PASSWORD" == \'*\' ]] || [[ "$CURRENT_PASSWORD" == \"*\" ]]; then
-    CURRENT_PASSWORD="${CURRENT_PASSWORD:1:${#CURRENT_PASSWORD}-2}"
-  fi
-  if [ -n "$CURRENT_PASSWORD" ]; then
-    echo
-    echo "HomeSphere 当前家庭访问密码："
-    echo
-    echo "    $CURRENT_PASSWORD"
-    echo
-  fi
-fi
- .env; then
-  sed -i '/^QMS_API_KEY=/d' .env
-  QMS_API_KEY="qms_$(openssl rand -hex 12)"
-  printf 'QMS_API_KEY=%s\n' "$QMS_API_KEY" >> .env
-fi
-chmod 600 .env
-
-say "拉取 HomeSphere 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
-
-say "拉取 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。请检查 VPS 网络后重试。"
-
-say "拉取 QMediaSync PostgreSQL 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull qms-postgres || fail "PostgreSQL 镜像下载失败。请检查 VPS 网络后重试。"
-
-say "启动 HomeSphere、Media Bridge 与 PostgreSQL"
-docker compose "${COMPOSE_FILES[@]}" up -d
-
-say "配置低频 STRM 本地索引"
-bash "$APP_DIR/scripts/install-strm-timer.sh"
-
-# 清理更新后不再使用的旧镜像，避免 10GB VPS 长期堆积。
-docker image prune -f >/dev/null 2>&1 || true
-
-say "部署结果"
-docker compose "${COMPOSE_FILES[@]}" ps
-
-cat <<'EOF'
-
-安装完成。
-
-为了安全，HomeSphere 的 8080 和 Media Bridge 的 12333 都只监听 VPS 本机，
-不会直接暴露到公网。
-
-下一步有两种访问方式：
-
-1. 先自己测试：
-   在你自己的电脑终端执行：
-   ssh -L 8080:127.0.0.1:8080 -L 12333:127.0.0.1:12333 root@你的VPS_IP
-
-   然后浏览器打开：
-   HomeSphere:   http://127.0.0.1:8080
-   Media Bridge: http://127.0.0.1:12333
-
-2. 准备给家人/朋友长期使用：
-   使用 Cloudflare Tunnel 提供 HTTPS，不需要把域名直接解析到 VPS，也不需要开放 80/443。
-   先在 Cloudflare 创建 Remotely-managed Tunnel，并把 Public Hostname 的 Service 指向：
-   http://127.0.0.1:8080
-
-   然后在 SSH 中运行：
-   bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/https.sh)
-
-请按 Media Bridge 页面提示完成首次设置和 115 授权。
-QMediaSync 数据库请选择 PostgreSQL，并填写：
-  主机：qms-postgres
-  端口：5432
-  数据库：qmediasync
-  用户名：qmediasync
-数据库密码会在安装完成后的 SSH 输出中显示。
-
-HomeSphere 家庭密码忘记后，不需要找配置文件。
-SSH 登录 VPS 后运行：
-bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/password.sh)
-
-即可查看当前密码、生成新的随机密码或设置自己的密码。
-
-以后 SSH 登录 VPS 后，直接运行：
-homesphere
-
-即可进入统一管理界面。
-EOF
-
-if [ -f .env ]; then
-  QMS_DB_PASSWORD="$(sed -n 's/^QMS_POSTGRES_PASSWORD=//p' .env | head -n1)"
-  if [ -n "$QMS_DB_PASSWORD" ]; then
-    echo
-    echo "QMediaSync PostgreSQL 连接信息："
-    echo
-    echo "    主机：qms-postgres"
-    echo "    端口：5432"
-    echo "    数据库：qmediasync"
-    echo "    用户名：qmediasync"
-    echo "    密码：$QMS_DB_PASSWORD"
-    echo
-  fi
-
-  CURRENT_PASSWORD="$(grep '^PASSWORD=' .env | head -n1 || true)"
-  CURRENT_PASSWORD="${CURRENT_PASSWORD#PASSWORD=}"
-  if [[ "$CURRENT_PASSWORD" == \'*\' ]] || [[ "$CURRENT_PASSWORD" == \"*\" ]]; then
-    CURRENT_PASSWORD="${CURRENT_PASSWORD:1:${#CURRENT_PASSWORD}-2}"
-  fi
   if [ -n "$CURRENT_PASSWORD" ]; then
     echo
     echo "HomeSphere 当前家庭访问密码："
