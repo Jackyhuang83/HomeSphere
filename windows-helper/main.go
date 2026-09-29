@@ -224,7 +224,12 @@ func allowedUpstream(u *url.URL) bool {
 		return false
 	}
 	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
-	return host == "115.com" || strings.HasSuffix(host, ".115.com")
+	for _, domain := range []string{"115.com", "115cdn.net", "115vod.com"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
 }
 
 func rewritePlaylist(text string, base *url.URL) (string, error) {
