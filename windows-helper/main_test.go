@@ -13,6 +13,8 @@ func TestAllowedUpstream(t *testing.T) {
 	}{
 		{"https://cpats01.115.com/a.m3u8", true},
 		{"https://115.com/a", true},
+		{"https://dl.115cdn.net/a.ts", true},
+		{"https://foo.115vod.com/a.m3u8", true},
 		{"http://cpats01.115.com/a.m3u8", false},
 		{"https://evil.example/115.com/a", false},
 	}
