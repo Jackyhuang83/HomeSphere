@@ -162,10 +162,20 @@ function isMasterPlaylist(text:string,base:URL):boolean{
 }
 
 async function rewriteMasterPlaylist(text:string,base:URL):Promise<string>{
-  const lines=text.split(/\r?\n/);
-  const urls=new Set<string>();
+  const {playlist,urls}=rewriteMasterPlaylistText(text,base);
 
-  const rewritten=lines.map(raw=>{
+  for(const url of urls){
+    await ensurePublic(url,'115 HLS 关联播放清单');
+  }
+
+  return playlist;
+}
+
+function rewriteMasterPlaylistText(text:string,base:URL):{playlist:string;urls:URL[]}{
+  const lines=text.split(/\r?\n/);
+  const urls=new Map<string,URL>();
+
+  const playlist=lines.map(raw=>{
     const line=raw.trim();
     if(!line) return raw;
 
@@ -173,22 +183,22 @@ async function rewriteMasterPlaylist(text:string,base:URL):Promise<string>{
       return raw.replace(/URI="([^"]+)"/g,(_match,value:string)=>{
         const absolute=new URL(value,base);
         ensureHttp(absolute);
-        urls.add(absolute.toString());
+        urls.set(absolute.toString(),absolute);
         return `URI="${absolute.toString()}"`;
       });
     }
 
     const absolute=new URL(line,base);
     ensureHttp(absolute);
-    urls.add(absolute.toString());
+    urls.set(absolute.toString(),absolute);
     return absolute.toString();
   }).join('\n');
 
-  for(const url of urls){
-    await ensurePublic(new URL(url),'115 HLS 关联播放清单');
-  }
+  return {playlist,urls:[...urls.values()]};
+}
 
-  return rewritten;
+export function __rewrite115MasterForTest(text:string,base:string):string{
+  return rewriteMasterPlaylistText(text,new URL(base)).playlist;
 }
 
 function selectBrowserCompatibleStream(streams:V115VideoUrl[]):V115VideoUrl{
