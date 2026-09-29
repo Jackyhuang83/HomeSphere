@@ -53,7 +53,7 @@ KEY_HASH="$(printf '%s' "$QMS_API_KEY" | sha256sum | awk '{print $1}')"
 KEY_PREFIX="${QMS_API_KEY:0:8}"
 NOW="$(date +%s)"
 
-docker exec -e PGPASSWORD="$QMS_PASSWORD" qms-postgres \
+docker exec -i -e PGPASSWORD="$QMS_PASSWORD" qms-postgres \
   psql -v ON_ERROR_STOP=1 -U "$QMS_USER" -d "$QMS_DB" >/dev/null <<SQL
 DELETE FROM api_keys
 WHERE name='HomeSphere playback resolver'
