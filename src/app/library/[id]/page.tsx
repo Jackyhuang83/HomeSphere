@@ -89,11 +89,11 @@ export default function WorkPage(){
                 playsInline
                 preload="metadata"
                 className="w-full h-full bg-black"
-                onError={()=>setPlaybackError('浏览器无法播放该媒体，请检查文件编码或 CDN 响应')}
+                onError={(event)=>setPlaybackError(`HLS 播放失败（MediaError ${event.currentTarget.error?.code??'unknown'}）`)}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
-          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权并解析 STRM → Media Bridge → 浏览器直连最终 CDN。视频字节不经过 HomeSphere。</p>
+          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS → 浏览器直连 115 分片。视频字节不经过 HomeSphere。</p>
         </div>
         <aside className="card p-4">
           <div className="flex gap-3">
