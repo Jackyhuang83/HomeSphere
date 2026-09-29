@@ -64,12 +64,12 @@ jobs:
 
           HomeSphere verified this QMediaSync release in the 115 STRM/HLS playback path before freezing it.
 
-          - Upstream version: `${QMS_VERSION}`
-          - Upstream source commit: `${QMS_COMMIT}`
-          - Upstream image: `${SOURCE_IMAGE}`
-          - Upstream pulled digest: `${SOURCE_DIGEST}`
-          - Frozen HomeSphere image: `${TARGET_IMAGE}`
-          - Platform: `linux/amd64`
+          - Upstream version: ${QMS_VERSION}
+          - Upstream source commit: ${QMS_COMMIT}
+          - Upstream image: ${SOURCE_IMAGE}
+          - Upstream pulled digest: ${SOURCE_DIGEST}
+          - Frozen HomeSphere image: ${TARGET_IMAGE}
+          - Platform: linux/amd64
           - Upstream license: GPL-3.0
 
           This release preserves the corresponding upstream source snapshot together with the mirrored runtime image reference. HomeSphere does not automatically follow future QMediaSync releases.
