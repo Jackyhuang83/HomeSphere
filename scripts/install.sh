@@ -175,8 +175,8 @@ chmod 600 .env
 say "拉取 HomeSphere 镜像"
 docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
 
-say "拉取 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。请检查 VPS 网络后重试。"
+say "准备冻结的 QMediaSync 镜像"
+bash "$APP_DIR/scripts/ensure-qms-image.sh"
 
 say "拉取 QMediaSync PostgreSQL 镜像"
 docker compose "${COMPOSE_FILES[@]}" pull qms-postgres || fail "PostgreSQL 镜像下载失败。请检查 VPS 网络后重试。"
