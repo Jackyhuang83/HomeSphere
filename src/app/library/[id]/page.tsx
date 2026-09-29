@@ -86,6 +86,7 @@ export default function WorkPage(){
               :playbackUrl?<HlsVideo
                 key={`${selected.id}:${playbackUrl}`}
                 src={playbackUrl}
+                mediaId={selected.id}
                 onFatalError={setPlaybackError}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
@@ -116,7 +117,7 @@ export default function WorkPage(){
   </div>;
 }
 
-function HlsVideo({src,onFatalError}:{src:string;onFatalError:(message:string)=>void}){
+function HlsVideo({src,mediaId,onFatalError}:{src:string;mediaId:string;onFatalError:(message:string)=>void}){
   const videoRef=useRef<HTMLVideoElement|null>(null);
 
   useEffect(()=>{
@@ -126,6 +127,29 @@ function HlsVideo({src,onFatalError}:{src:string;onFatalError:(message:string)=>
     let hls:Hls|undefined;
     let networkRecovered=false;
     let mediaRecovered=false;
+    let usingDirect=false;
+    let disposed=false;
+
+    const switchToDirect=async()=>{
+      if(usingDirect||disposed)return;
+      usingDirect=true;
+
+      try{
+        const response=await fetch(`/api/play/${encodeURIComponent(mediaId)}?direct=1`,{cache:'no-store'});
+        const data=await response.json();
+        if(!response.ok)throw new Error(data.error||'获取115直链失败');
+        if(!data.url)throw new Error('115直链为空');
+
+        hls?.destroy();
+        hls=undefined;
+
+        video.src=String(data.url);
+        video.load();
+        video.play().catch(()=>{});
+      }catch(error){
+        onFatalError(error instanceof Error?error.message:'桌面浏览器直链兜底失败');
+      }
+    };
 
     const nativeHls=video.canPlayType('application/vnd.apple.mpegurl')!=='';
 
@@ -152,23 +176,23 @@ function HlsVideo({src,onFatalError}:{src:string;onFatalError:(message:string)=>
           return;
         }
 
-        onFatalError(`HLS 播放失败（${data.type} / ${data.details}）`);
-        hls?.destroy();
+        void switchToDirect();
       });
 
       hls.loadSource(src);
       hls.attachMedia(video);
     }else{
-      onFatalError('当前浏览器不支持 HLS 播放');
+      void switchToDirect();
     }
 
     return()=>{
+      disposed=true;
       hls?.destroy();
       video.pause();
       video.removeAttribute('src');
       video.load();
     };
-  },[src,onFatalError]);
+  },[src,mediaId,onFatalError]);
 
   return <video
     ref={videoRef}
@@ -178,7 +202,7 @@ function HlsVideo({src,onFatalError}:{src:string;onFatalError:(message:string)=>
     className="w-full h-full bg-black"
     onError={(event)=>{
       const code=event.currentTarget.error?.code;
-      if(code)onFatalError(`HLS 播放失败（MediaError ${code}）`);
+      if(code)onFatalError(`浏览器无法播放当前视频格式（MediaError ${code}）`);
     }}
   />;
 }
