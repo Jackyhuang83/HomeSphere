@@ -1,7 +1,8 @@
 'use client';
 
+import Hls from 'hls.js';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Header } from '@/components/header';
 import type { LibraryWorkDetail, MediaItem } from '@/lib/library/types';
@@ -82,14 +83,10 @@ export default function WorkPage(){
             {!selected?<span className="text-white/50 text-sm">没有可播放文件</span>
               :playbackLoading?<span className="text-white/50 text-sm">正在获取播放地址…</span>
               :playbackError?<span className="text-red-300 text-sm px-4 text-center">{playbackError}</span>
-              :playbackUrl?<video
+              :playbackUrl?<HlsVideo
                 key={`${selected.id}:${playbackUrl}`}
                 src={playbackUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="w-full h-full bg-black"
-                onError={(event)=>setPlaybackError(`HLS 播放失败（MediaError ${event.currentTarget.error?.code??'unknown'}）`)}
+                onFatalError={setPlaybackError}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
@@ -118,4 +115,72 @@ export default function WorkPage(){
     </main>
   </div>;
 }
+
+function HlsVideo({src,onFatalError}:{src:string;onFatalError:(message:string)=>void}){
+  const videoRef=useRef<HTMLVideoElement|null>(null);
+
+  useEffect(()=>{
+    const video=videoRef.current;
+    if(!video)return;
+
+    let hls:Hls|undefined;
+    let networkRecovered=false;
+    let mediaRecovered=false;
+
+    const nativeHls=video.canPlayType('application/vnd.apple.mpegurl')!=='';
+
+    if(nativeHls){
+      video.src=src;
+    }else if(Hls.isSupported()){
+      hls=new Hls({
+        enableWorker:true,
+        lowLatencyMode:false,
+      });
+
+      hls.on(Hls.Events.ERROR,(_event,data)=>{
+        if(!data.fatal)return;
+
+        if(data.type===Hls.ErrorTypes.NETWORK_ERROR&&!networkRecovered){
+          networkRecovered=true;
+          hls?.startLoad();
+          return;
+        }
+
+        if(data.type===Hls.ErrorTypes.MEDIA_ERROR&&!mediaRecovered){
+          mediaRecovered=true;
+          hls?.recoverMediaError();
+          return;
+        }
+
+        onFatalError(`HLS 播放失败（${data.type} / ${data.details}）`);
+        hls?.destroy();
+      });
+
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    }else{
+      onFatalError('当前浏览器不支持 HLS 播放');
+    }
+
+    return()=>{
+      hls?.destroy();
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+  },[src,onFatalError]);
+
+  return <video
+    ref={videoRef}
+    controls
+    playsInline
+    preload="metadata"
+    className="w-full h-full bg-black"
+    onError={(event)=>{
+      const code=event.currentTarget.error?.code;
+      if(code)onFatalError(`HLS 播放失败（MediaError ${code}）`);
+    }}
+  />;
+}
+
 function Centered({text}:{text:string}){return <div className="min-h-screen"><Header/><main className="min-h-[70vh] flex items-center justify-center px-6 text-muted">{text}</main></div>;}
