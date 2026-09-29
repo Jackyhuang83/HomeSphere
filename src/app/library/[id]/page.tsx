@@ -91,7 +91,7 @@ export default function WorkPage(){
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
-          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS → 浏览器直连 115 分片。视频字节不经过 HomeSphere。</p>
+          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone 使用原生 HLS；Windows 通过本机播放助手连接 115。视频字节不经过 VPS。</p>
         </div>
         <aside className="card p-4">
           <div className="flex gap-3">
@@ -125,64 +125,68 @@ function HlsVideo({src,mediaId,onFatalError}:{src:string;mediaId:string;onFatalE
     if(!video)return;
 
     let hls:Hls|undefined;
+    let disposed=false;
     let networkRecovered=false;
     let mediaRecovered=false;
-    let usingDirect=false;
-    let disposed=false;
 
-    const switchToDirect=async()=>{
-      if(usingDirect||disposed)return;
-      usingDirect=true;
+    const startDesktopPlayback=async()=>{
+      if(!Hls.isSupported()){
+        onFatalError('当前桌面浏览器不支持 HLS.js 播放');
+        return;
+      }
 
       try{
-        const response=await fetch(`/api/play/${encodeURIComponent(mediaId)}?direct=1`,{cache:'no-store'});
+        const health=await fetch('http://127.0.0.1:17865/health',{
+          cache:'no-store',
+          signal:AbortSignal.timeout(2500),
+        });
+        if(!health.ok)throw new Error('helper health failed');
+
+        const response=await fetch(`/api/play/${encodeURIComponent(mediaId)}?helper=1`,{
+          cache:'no-store',
+        });
         const data=await response.json();
-        if(!response.ok)throw new Error(data.error||'获取115直链失败');
-        if(!data.url)throw new Error('115直链为空');
+        if(!response.ok)throw new Error(data.error||'获取115 HLS地址失败');
+        if(!data.url)throw new Error('115 HLS地址为空');
+        if(disposed)return;
 
-        hls?.destroy();
-        hls=undefined;
+        const helperUrl=`http://127.0.0.1:17865/proxy?url=${encodeURIComponent(String(data.url))}`;
 
-        video.src=String(data.url);
-        video.load();
-        video.play().catch(()=>{});
-      }catch(error){
-        onFatalError(error instanceof Error?error.message:'桌面浏览器直链兜底失败');
+        hls=new Hls({
+          enableWorker:true,
+          lowLatencyMode:false,
+        });
+
+        hls.on(Hls.Events.ERROR,(_event,errorData)=>{
+          if(!errorData.fatal)return;
+
+          if(errorData.type===Hls.ErrorTypes.NETWORK_ERROR&&!networkRecovered){
+            networkRecovered=true;
+            hls?.startLoad();
+            return;
+          }
+
+          if(errorData.type===Hls.ErrorTypes.MEDIA_ERROR&&!mediaRecovered){
+            mediaRecovered=true;
+            hls?.recoverMediaError();
+            return;
+          }
+
+          onFatalError(`Windows 播放助手链路失败（${errorData.type} / ${errorData.details}）`);
+        });
+
+        hls.loadSource(helperUrl);
+        hls.attachMedia(video);
+      }catch{
+        onFatalError('未检测到 HomeSphere Windows 播放助手，或浏览器未允许访问本机 127.0.0.1');
       }
     };
 
     const nativeHls=video.canPlayType('application/vnd.apple.mpegurl')!=='';
-
     if(nativeHls){
       video.src=src;
-    }else if(Hls.isSupported()){
-      hls=new Hls({
-        enableWorker:true,
-        lowLatencyMode:false,
-      });
-
-      hls.on(Hls.Events.ERROR,(_event,data)=>{
-        if(!data.fatal)return;
-
-        if(data.type===Hls.ErrorTypes.NETWORK_ERROR&&!networkRecovered){
-          networkRecovered=true;
-          hls?.startLoad();
-          return;
-        }
-
-        if(data.type===Hls.ErrorTypes.MEDIA_ERROR&&!mediaRecovered){
-          mediaRecovered=true;
-          hls?.recoverMediaError();
-          return;
-        }
-
-        void switchToDirect();
-      });
-
-      hls.loadSource(src);
-      hls.attachMedia(video);
     }else{
-      void switchToDirect();
+      void startDesktopPlayback();
     }
 
     return()=>{
@@ -202,7 +206,7 @@ function HlsVideo({src,mediaId,onFatalError}:{src:string;mediaId:string;onFatalE
     className="w-full h-full bg-black"
     onError={(event)=>{
       const code=event.currentTarget.error?.code;
-      if(code)onFatalError(`浏览器无法播放当前视频格式（MediaError ${code}）`);
+      if(code)onFatalError(`浏览器播放失败（MediaError ${code}）`);
     }}
   />;
 }
