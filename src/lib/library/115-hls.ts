@@ -34,12 +34,19 @@ type V115PlayResponse={
 
 let playTail:Promise<void>=Promise.resolve();
 let lastPlayRequestAt=0;
-const hlsCache=new Map<string,{target:string;expiresAt:number}>();
+export type Resolved115Hls={
+  kind:'master'|'direct';
+  upstreamUrl:string;
+  playlist?:string;
+  target?:string;
+};
 
-export async function resolve115HlsPlaybackTarget(
+const hlsCache=new Map<string,{result:Resolved115Hls;expiresAt:number}>();
+
+export async function resolve115HlsPlayback(
   sourceUrl:string,
   opts?:{signal?:AbortSignal;userAgent?:string}
-):Promise<string>{
+):Promise<Resolved115Hls>{
   const source=new URL(validateStrmPlaybackUrl(sourceUrl));
   if(!source.pathname.startsWith('/115/url/')&&source.pathname!=='/115/newurl'){
     throw new Error('当前 STRM 不是 115 播放地址');
@@ -93,16 +100,27 @@ export async function resolve115HlsPlaybackTarget(
   if(!master.ok) throw new Error(`115 HLS 主播放清单返回 HTTP ${master.status}`);
 
   const text=await master.text();
-  const child=findVariantPlaylist(text,masterUrl);
-  if(!child){
-    throw new Error('115 HLS 主播放清单没有找到子播放清单');
+
+  if(isMasterPlaylist(text,masterUrl)){
+    const playlist=await rewriteMasterPlaylist(text,masterUrl);
+    const result:Resolved115Hls={
+      kind:'master',
+      upstreamUrl:masterUrl.toString(),
+      playlist,
+    };
+    cacheResult(cacheKey,result);
+    return result;
   }
 
-  ensureHttp(child);
-  await ensurePublic(child,'115 HLS 子播放清单');
-  const target=child.toString();
-  cacheTarget(cacheKey,target);
-  return target;
+  // 少数情况下 115 可能直接返回媒体播放清单。
+  // 这种清单直接交给浏览器，让其中的相对分片继续相对 115 CDN 解析。
+  const result:Resolved115Hls={
+    kind:'direct',
+    upstreamUrl:masterUrl.toString(),
+    target:masterUrl.toString(),
+  };
+  cacheResult(cacheKey,result);
+  return result;
 }
 
 async function get115TokenFromQms(source:URL,userId:string,signal?:AbortSignal):Promise<string>{
@@ -132,22 +150,45 @@ async function get115TokenFromQms(source:URL,userId:string,signal?:AbortSignal):
   return account.token;
 }
 
-function findVariantPlaylist(text:string,base:URL):URL|undefined{
+function isMasterPlaylist(text:string,base:URL):boolean{
   const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-  for(let i=0;i<lines.length;i++){
-    if(!lines[i].startsWith('#EXT-X-STREAM-INF')) continue;
-    for(let j=i+1;j<lines.length;j++){
-      if(lines[j].startsWith('#')) continue;
-      return new URL(lines[j],base);
+  if(lines.some(line=>line.startsWith('#EXT-X-STREAM-INF')||line.startsWith('#EXT-X-MEDIA:'))) return true;
+
+  return lines.some(line=>{
+    if(line.startsWith('#')) return /URI="[^"]+\.m3u8(?:\?[^"]*)?"/i.test(line);
+    try{return new URL(line,base).pathname.toLowerCase().endsWith('.m3u8');}
+    catch{return false;}
+  });
+}
+
+async function rewriteMasterPlaylist(text:string,base:URL):Promise<string>{
+  const lines=text.split(/\r?\n/);
+  const urls=new Set<string>();
+
+  const rewritten=lines.map(raw=>{
+    const line=raw.trim();
+    if(!line) return raw;
+
+    if(line.startsWith('#')){
+      return raw.replace(/URI="([^"]+)"/g,(_match,value:string)=>{
+        const absolute=new URL(value,base);
+        ensureHttp(absolute);
+        urls.add(absolute.toString());
+        return `URI="${absolute.toString()}"`;
+      });
     }
+
+    const absolute=new URL(line,base);
+    ensureHttp(absolute);
+    urls.add(absolute.toString());
+    return absolute.toString();
+  }).join('\n');
+
+  for(const url of urls){
+    await ensurePublic(new URL(url),'115 HLS 关联播放清单');
   }
 
-  for(const line of lines){
-    if(line.startsWith('#')) continue;
-    const url=new URL(line,base);
-    if(url.pathname.toLowerCase().endsWith('.m3u8')) return url;
-  }
-  return undefined;
+  return rewritten;
 }
 
 function selectBrowserCompatibleStream(streams:V115VideoUrl[]):V115VideoUrl{
@@ -195,24 +236,24 @@ async function schedulePlayRequest<T>(task:()=>Promise<T>,signal?:AbortSignal):P
   }
 }
 
-function getCached(key:string):string|undefined{
+function getCached(key:string):Resolved115Hls|undefined{
   const item=hlsCache.get(key);
   if(!item) return undefined;
   if(item.expiresAt<=Date.now()){
     hlsCache.delete(key);
     return undefined;
   }
-  return item.target;
+  return item.result;
 }
 
-function cacheTarget(key:string,target:string):void{
+function cacheResult(key:string,result:Resolved115Hls):void{
   const ttl=cacheTtlMs();
   if(ttl<=0) return;
   if(hlsCache.size>=MAX_CACHE_ENTRIES){
     const oldest=hlsCache.keys().next().value as string|undefined;
     if(oldest) hlsCache.delete(oldest);
   }
-  hlsCache.set(key,{target,expiresAt:Date.now()+ttl});
+  hlsCache.set(key,{result,expiresAt:Date.now()+ttl});
 }
 
 function timeoutMs():number{
