@@ -32,6 +32,14 @@ export async function GET(req:Request,ctx:{params:Promise<{id:string}>}){
       signal:req.signal,
       userAgent,
     });
+
+    if(url.searchParams.get('helper')==='1'){
+      return Response.json({url:resolved.upstreamUrl,type:'hls-upstream'},{headers:{
+        'Cache-Control':'private, no-store, max-age=0',
+        'Referrer-Policy':'no-referrer',
+      }});
+    }
+
     if(url.searchParams.get('resolve')==='1'){
       const playbackUrl=resolved.kind==='master'
         ? `/api/play/${encodeURIComponent(id)}`
