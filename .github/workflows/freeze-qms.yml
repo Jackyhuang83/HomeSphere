@@ -19,8 +19,8 @@ concurrency:
 env:
   QMS_VERSION: v0.14.23
   QMS_COMMIT: 8219d92607982b2405c7c4bfb645f8f1d6ff3bf6
-  SOURCE_IMAGE: qicfan/qmediasync:v0.14.23
-  TARGET_IMAGE: ghcr.io/${{ github.repository_owner }}/homesphere:qms-v0.14.23-frozen
+  SOURCE_IMAGE: qicfan/qmediasync@sha256:ee74ff4edcbc6b3e949404286951b7a9d21977203099dceb2fdea36c2840f82d
+  TARGET_IMAGE: ghcr.io/jackyhuang83/homesphere:qms-v0.14.23-frozen
   RELEASE_TAG: qms-v0.14.23-frozen
 
 jobs:
