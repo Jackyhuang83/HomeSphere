@@ -20,6 +20,7 @@ env:
   QMS_VERSION: v0.14.23
   QMS_COMMIT: 8219d92607982b2405c7c4bfb645f8f1d6ff3bf6
   SOURCE_IMAGE: qicfan/qmediasync@sha256:ee74ff4edcbc6b3e949404286951b7a9d21977203099dceb2fdea36c2840f82d
+  LOCAL_IMAGE: homesphere-qms:v0.14.23-frozen
   TARGET_IMAGE: ghcr.io/jackyhuang83/homesphere:qms-v0.14.23-frozen
   RELEASE_TAG: qms-v0.14.23-frozen
 
@@ -38,16 +39,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mirror verified QMediaSync image
+      - name: Freeze verified QMediaSync image
         shell: bash
         run: |
           set -Eeuo pipefail
           docker pull --platform linux/amd64 "$SOURCE_IMAGE"
-          SOURCE_DIGEST="$(docker image inspect "$SOURCE_IMAGE" --format '{{join .RepoDigests "\n"}}' | grep '^qicfan/qmediasync@sha256:' | head -n1)"
-          test -n "$SOURCE_DIGEST"
+          docker tag "$SOURCE_IMAGE" "$LOCAL_IMAGE"
           docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE"
+
+          docker save "$LOCAL_IMAGE" | gzip -9 > "qmediasync-${QMS_VERSION}-amd64.tar.gz"
+          sha256sum "qmediasync-${QMS_VERSION}-amd64.tar.gz" > "qmediasync-${QMS_VERSION}-amd64.tar.gz.sha256"
+
+          # GHCR 是便捷副本；Release 镜像归档才是独立恢复兜底。
           docker push "$TARGET_IMAGE"
-          printf '%s\n' "$SOURCE_DIGEST" > /tmp/qms-source-digest.txt
 
       - name: Archive corresponding source
         shell: bash
@@ -58,7 +62,6 @@ jobs:
             -o "qmediasync-${QMS_VERSION}-source.tar.gz"
           test -s "qmediasync-${QMS_VERSION}-source.tar.gz"
 
-          SOURCE_DIGEST="$(cat /tmp/qms-source-digest.txt)"
           cat > qmediasync-freeze-notes.md <<EOF
           # QMediaSync frozen dependency
 
@@ -67,30 +70,34 @@ jobs:
           - Upstream version: ${QMS_VERSION}
           - Upstream source commit: ${QMS_COMMIT}
           - Upstream image: ${SOURCE_IMAGE}
-          - Upstream pulled digest: ${SOURCE_DIGEST}
-          - Frozen HomeSphere image: ${TARGET_IMAGE}
+          - Local frozen image tag: ${LOCAL_IMAGE}
+          - GHCR mirror: ${TARGET_IMAGE}
           - Platform: linux/amd64
           - Upstream license: GPL-3.0
 
-          This release preserves the corresponding upstream source snapshot together with the mirrored runtime image reference. HomeSphere does not automatically follow future QMediaSync releases.
+          The release assets contain both the runnable Docker image archive and the corresponding source snapshot.
+          HomeSphere does not automatically follow future QMediaSync releases.
           EOF
 
-      - name: Publish source snapshot release
+      - name: Publish frozen image and source release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
+          ASSETS=(
+            "qmediasync-${QMS_VERSION}-amd64.tar.gz"
+            "qmediasync-${QMS_VERSION}-amd64.tar.gz.sha256"
+            "qmediasync-${QMS_VERSION}-source.tar.gz"
+          )
+
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" \
-              "qmediasync-${QMS_VERSION}-source.tar.gz" \
-              --clobber
+            gh release upload "$RELEASE_TAG" "${ASSETS[@]}" --clobber
             gh release edit "$RELEASE_TAG" \
               --title "Frozen QMediaSync ${QMS_VERSION}" \
               --notes-file qmediasync-freeze-notes.md
           else
-            gh release create "$RELEASE_TAG" \
-              "qmediasync-${QMS_VERSION}-source.tar.gz" \
+            gh release create "$RELEASE_TAG" "${ASSETS[@]}" \
               --title "Frozen QMediaSync ${QMS_VERSION}" \
               --notes-file qmediasync-freeze-notes.md
           fi
