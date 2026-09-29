@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { guardRequest, jsonError } from '@/lib/api-guard';
-import { resolve115HlsPlaybackTarget } from '@/lib/library/115-hls';
+import { resolve115HlsPlayback } from '@/lib/library/115-hls';
 import { getBridgeHealth } from '@/lib/library/bridge-health';
 import { getProbeMedia } from '@/lib/library/db';
 
@@ -26,13 +26,14 @@ export async function POST(req:Request){
   lastProbeAt=now;
   const started=Date.now();
   try{
-    const target=await resolve115HlsPlaybackTarget(media.sourceUrl,{
+    const resolved=await resolve115HlsPlayback(media.sourceUrl,{
       signal:req.signal,userAgent:req.headers.get('user-agent')||undefined,
     });
+    const upstream=new URL(resolved.upstreamUrl);
     return NextResponse.json({
       success:true,sample:{id:media.id,filename:media.filename},
-      bridgeHost:new URL(media.sourceUrl).hostname,finalHost:new URL(target).hostname,
-      finalProtocol:new URL(target).protocol.replace(':',''),playbackType:'hls',
+      bridgeHost:new URL(media.sourceUrl).hostname,finalHost:upstream.hostname,
+      finalProtocol:upstream.protocol.replace(':',''),playbackType:'hls',
       durationMs:Date.now()-started,checkedAt:Date.now(),
     },{headers:{'Cache-Control':'private, no-store'}});
   }catch(error){return jsonError(error instanceof Error?error.message:'HLS 播放链路探测失败',502);}
