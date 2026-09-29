@@ -12,6 +12,9 @@ export default function WorkPage(){
   const [work,setWork]=useState<LibraryWorkDetail|null>(null);
   const [selected,setSelected]=useState<MediaItem|null>(null);
   const [error,setError]=useState('');
+  const [playbackUrl,setPlaybackUrl]=useState('');
+  const [playbackLoading,setPlaybackLoading]=useState(false);
+  const [playbackError,setPlaybackError]=useState('');
 
   useEffect(()=>{
     if(!id)return;
@@ -22,6 +25,36 @@ export default function WorkPage(){
       .catch(err=>{if(err?.name!=='AbortError')setError(err instanceof Error?err.message:'作品读取失败');});
     return()=>controller.abort();
   },[id]);
+
+  useEffect(()=>{
+    if(!selected){
+      setPlaybackUrl('');
+      setPlaybackError('');
+      setPlaybackLoading(false);
+      return;
+    }
+
+    const controller=new AbortController();
+    setPlaybackUrl('');
+    setPlaybackError('');
+    setPlaybackLoading(true);
+
+    fetch(`/api/play/${encodeURIComponent(selected.id)}?resolve=1`,{
+      signal:controller.signal,
+      cache:'no-store',
+    })
+      .then(async res=>{
+        const data=await res.json();
+        if(!res.ok)throw new Error(data.error||'获取播放地址失败');
+        if(!data.url)throw new Error('播放地址为空');
+        return String(data.url);
+      })
+      .then(url=>setPlaybackUrl(url))
+      .catch(err=>{if(err?.name!=='AbortError')setPlaybackError(err instanceof Error?err.message:'获取播放地址失败');})
+      .finally(()=>{if(!controller.signal.aborted)setPlaybackLoading(false);});
+
+    return()=>controller.abort();
+  },[selected]);
 
   const seasons=useMemo(()=>{
     const map=new Map<number,MediaItem[]>();
@@ -46,10 +79,21 @@ export default function WorkPage(){
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
         <div>
           <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
-            {selected?<video key={selected.id} src={`/api/play/${encodeURIComponent(selected.id)}`} controls playsInline preload="metadata" className="w-full h-full bg-black"/>
-              :<span className="text-white/50 text-sm">没有可播放文件</span>}
+            {!selected?<span className="text-white/50 text-sm">没有可播放文件</span>
+              :playbackLoading?<span className="text-white/50 text-sm">正在获取播放地址…</span>
+              :playbackError?<span className="text-red-300 text-sm px-4 text-center">{playbackError}</span>
+              :playbackUrl?<video
+                key={`${selected.id}:${playbackUrl}`}
+                src={playbackUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full h-full bg-black"
+                onError={()=>setPlaybackError('浏览器无法播放该媒体，请检查文件编码或 CDN 响应')}
+              />
+              :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
-          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → STRM → Media Bridge → 最终 CDN。视频字节不经过 HomeSphere。</p>
+          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权并解析 STRM → Media Bridge → 浏览器直连最终 CDN。视频字节不经过 HomeSphere。</p>
         </div>
         <aside className="card p-4">
           <div className="flex gap-3">
