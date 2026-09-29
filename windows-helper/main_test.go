@@ -32,7 +32,7 @@ func TestRewritePlaylist(t *testing.T) {
 		"#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO=\"audio\"",
 		"video/index.m3u8",
 		"",
-	}, "\\n")
+	}, "\n")
 
 	out, err := rewritePlaylist(input, base)
 	if err != nil {
@@ -41,7 +41,7 @@ func TestRewritePlaylist(t *testing.T) {
 	if !strings.Contains(out, "http://127.0.0.1:17865/proxy?url=b64.") {
 		t.Fatalf("rewritten playlist does not point at helper: %s", out)
 	}
-	if strings.Contains(out, "URI=\\\"audio/index.m3u8\\\"") || strings.Contains(out, "\\nvideo/index.m3u8\\n") {
+	if strings.Contains(out, "URI=\"audio/index.m3u8\"") || strings.Contains(out, "\nvideo/index.m3u8\n") {
 		t.Fatalf("relative URLs were not rewritten: %s", out)
 	}
 }
