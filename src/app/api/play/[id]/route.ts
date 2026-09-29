@@ -1,6 +1,7 @@
 import { guardRequest, jsonError } from '@/lib/api-guard';
 import { getMedia } from '@/lib/library/db';
 import { resolve115HlsPlayback } from '@/lib/library/115-hls';
+import { resolveStrmPlaybackTarget } from '@/lib/library/bridge';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -13,12 +14,24 @@ export async function GET(req:Request,ctx:{params:Promise<{id:string}>}){
   if(!media.sourceUrl)return jsonError('STRM 条目没有播放地址',502);
 
   try{
+    const url=new URL(req.url);
+    const userAgent=req.headers.get('user-agent')||undefined;
+
+    if(url.searchParams.get('direct')==='1'){
+      const target=await resolveStrmPlaybackTarget(media.sourceUrl,{
+        signal:req.signal,
+        userAgent,
+      });
+      return Response.json({url:target,type:'direct'},{headers:{
+        'Cache-Control':'private, no-store, max-age=0',
+        'Referrer-Policy':'no-referrer',
+      }});
+    }
+
     const resolved=await resolve115HlsPlayback(media.sourceUrl,{
       signal:req.signal,
-      userAgent:req.headers.get('user-agent')||undefined,
+      userAgent,
     });
-
-    const url=new URL(req.url);
     if(url.searchParams.get('resolve')==='1'){
       const playbackUrl=resolved.kind==='master'
         ? `/api/play/${encodeURIComponent(id)}`
