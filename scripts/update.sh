@@ -62,14 +62,29 @@ if [[ "$CURRENT_BRIDGE_IMAGE" == qicfan/115strm:* ]]; then
   echo "已备份：$BACKUP_FILE"
 fi
 
-say "更新 HomeSphere 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull homesphere || fail "HomeSphere 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络以及 GHCR 镜像是否可正常拉取。"
+HOMESPHERE_IMAGE_REF="$(sed -n 's/^HOMESPHERE_IMAGE=//p' .env | tail -n1)"
+HOMESPHERE_IMAGE_REF="${HOMESPHERE_IMAGE_REF#\'}"
+HOMESPHERE_IMAGE_REF="${HOMESPHERE_IMAGE_REF%\'}"
+HOMESPHERE_IMAGE_REF="${HOMESPHERE_IMAGE_REF#\"}"
+HOMESPHERE_IMAGE_REF="${HOMESPHERE_IMAGE_REF%\"}"
+[ -n "$HOMESPHERE_IMAGE_REF" ] || HOMESPHERE_IMAGE_REF="ghcr.io/jackyhuang83/homesphere:edge"
 
-say "更新 Media Bridge 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull media-bridge || fail "Media Bridge 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络后重试。"
+say "更新 HomeSphere 镜像"
+if ! docker compose "${COMPOSE_FILES[@]}" pull homesphere; then
+  CURRENT_HOMESPHERE_ID="$(docker inspect -f '{{.Image}}' homesphere 2>/dev/null || true)"
+  if [ -z "$CURRENT_HOMESPHERE_ID" ]; then
+    fail "HomeSphere 镜像下载失败，且本机没有可回退的 HomeSphere 镜像。"
+  fi
+  echo "[警告] HomeSphere 镜像下载失败，继续使用 VPS 上当前已验证镜像。"
+  docker tag "$CURRENT_HOMESPHERE_ID" "$HOMESPHERE_IMAGE_REF" >/dev/null 2>&1 || true
+fi
+
+say "准备冻结的 QMediaSync 镜像"
+bash "$APP_DIR/scripts/ensure-qms-image.sh"
 
 say "更新 QMediaSync PostgreSQL 镜像"
-docker compose "${COMPOSE_FILES[@]}" pull qms-postgres || fail "PostgreSQL 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络后重试。"
+docker compose "${COMPOSE_FILES[@]}" pull qms-postgres ||
+  fail "PostgreSQL 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络后重试。"
 
 say "重启服务"
 docker compose "${COMPOSE_FILES[@]}" up -d
