@@ -15,6 +15,7 @@ export interface TmdbItem {
   backdropUrl?:string;
   overview?:string;
   countryCodes?:string[];
+  isAnimation?:boolean;
 }
 
 interface RawItem {
@@ -30,6 +31,8 @@ interface RawItem {
   overview?:string;
   origin_country?:string[];
   production_countries?:Array<{iso_3166_1?:string}>;
+  genre_ids?:number[];
+  genres?:Array<{id?:number;name?:string}>;
 }
 
 export function tmdbConfigured():boolean {
@@ -110,5 +113,6 @@ function mapItem(raw:RawItem,mediaType:MediaType):TmdbItem{
         ...(raw.origin_country||[]),
       ].map(code=>code.trim().toUpperCase()).filter(Boolean))
     ],
+    isAnimation:(raw.genre_ids||[]).includes(16)||(raw.genres||[]).some(item=>item.id===16),
   };
 }
