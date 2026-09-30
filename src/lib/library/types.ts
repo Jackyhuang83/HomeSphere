@@ -1,5 +1,6 @@
 export type MediaType = 'movie' | 'tv';
 export type ScrapeStatus = 'pending' | 'matched' | 'review' | 'failed' | 'manual';
+export type MediaRegion = 'mainland' | 'hmt' | 'overseas';
 
 export interface MediaItem {
   id:string;
@@ -28,11 +29,13 @@ export interface LibraryWork {
   posterUrl?:string;
   backdropUrl?:string;
   overview?:string;
+  region?:MediaRegion;
   scrapeStatus:ScrapeStatus;
   scrapeError?:string;
   matchConfidence?:'high'|'medium'|'low';
   manualMatch:boolean;
   fileCount:number;
+  addedAt?:number;
   updatedAt:number;
 }
 
