@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { guardRequest, jsonError } from '@/lib/api-guard';
-import { searchTmdb } from '@/lib/tmdb/client';
+import { getTmdbDetails, searchTmdb } from '@/lib/tmdb/client';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -15,7 +15,22 @@ export async function GET(req:Request) {
   if(!q) return jsonError('缺少 TMDB 搜索关键词',400);
   if(type!=='movie'&&type!=='tv') return jsonError('type 参数错误',400);
   try {
-    return NextResponse.json({items:await searchTmdb(q,type,year,req.signal)});
+    if(/^\d+$/.test(q)){
+      const item=await getTmdbDetails(type,Number(q),req.signal);
+      return NextResponse.json({items:item?[item]:[]});
+    }
+
+    let items=await searchTmdb(q,type,year,req.signal);
+    if(!items.length&&year) items=await searchTmdb(q,type,undefined,req.signal);
+
+    if(/[A-Za-z]/.test(q)){
+      const english=await searchTmdb(q,type,year,req.signal,'en-US');
+      const merged=new Map<number,(typeof items)[number]>();
+      for(const item of [...english,...items]) if(!merged.has(item.id)) merged.set(item.id,item);
+      items=[...merged.values()];
+    }
+
+    return NextResponse.json({items});
   } catch(error) {
     return jsonError(error instanceof Error?error.message:'TMDB 搜索失败',502);
   }
