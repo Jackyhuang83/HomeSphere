@@ -62,8 +62,10 @@ export default function MatchPage() {
       <h1 className="text-2xl font-semibold mt-5">修正 TMDB 匹配</h1>
       {work && <p className="text-sm text-muted mt-1">当前：{work.title}{work.year?` (${work.year})`:''}</p>}
 
+      <p className="text-xs text-faint mt-3">特殊发行名或源文件年份错误时，可直接输入 TMDB ID 精确匹配。</p>
+
       <form className="flex gap-2 mt-5" onSubmit={e=>{e.preventDefault();void search();}}>
-        <input className="input flex-1" value={query} onChange={e=>setQuery(e.target.value)} placeholder="输入更准确的片名" />
+        <input className="input flex-1" value={query} onChange={e=>setQuery(e.target.value)} placeholder="输入更准确的片名或 TMDB ID" />
         <button className="btn-primary" disabled={loading||!work}>{loading?'搜索中…':'搜索TMDB'}</button>
       </form>
       {error && <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm">{error}</div>}
