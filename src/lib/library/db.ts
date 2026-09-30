@@ -216,6 +216,40 @@ export function setWorkScrapeState(id:string,status:ScrapeStatus,error?:string):
     .run(status,error??null,Date.now(),id,SOURCE);
 }
 
+export function mergeDuplicateTmdbWorks():number {
+  const conn=database();
+  const groups=conn.prepare(`
+SELECT tmdb_id,media_type,COUNT(*) n
+FROM works
+WHERE provider=? AND tmdb_id IS NOT NULL
+GROUP BY tmdb_id,media_type
+HAVING COUNT(*)>1
+`).all(SOURCE) as unknown as Array<{tmdb_id:number;media_type:string;n:number}>;
+
+  let merged=0;
+  for(const group of groups){
+    const rows=conn.prepare(`
+SELECT w.id,w.manual_match,w.updated_at,COUNT(m.id) file_count
+FROM works w LEFT JOIN media m ON m.work_id=w.id
+WHERE w.provider=? AND w.tmdb_id=? AND w.media_type=?
+GROUP BY w.id
+ORDER BY COALESCE(w.manual_match,0) DESC,COUNT(m.id) DESC,w.updated_at DESC
+`).all(SOURCE,group.tmdb_id,group.media_type) as unknown as Array<{
+      id:string;manual_match:number|null;updated_at:number;file_count:number;
+    }>;
+    if(rows.length<2)continue;
+
+    const canonical=rows[0].id;
+    for(const duplicate of rows.slice(1)){
+      conn.prepare('UPDATE media SET work_id=? WHERE provider=? AND work_id=?').run(canonical,SOURCE,duplicate.id);
+      conn.prepare('DELETE FROM works WHERE provider=? AND id=?').run(SOURCE,duplicate.id);
+      merged++;
+    }
+    conn.prepare('UPDATE works SET updated_at=? WHERE provider=? AND id=?').run(Date.now(),SOURCE,canonical);
+  }
+  return merged;
+}
+
 export function reconcileMedia(currentIds:string[]):void {
   const conn=database();
   conn.exec('CREATE TEMP TABLE IF NOT EXISTS current_media_ids (id TEXT PRIMARY KEY)');
