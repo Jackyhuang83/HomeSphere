@@ -33,12 +33,18 @@ export function tmdbConfigured():boolean {
   return Boolean(process.env.TMDB_API_TOKEN?.trim());
 }
 
-export async function searchTmdb(query:string,mediaType:MediaType,year?:string,signal?:AbortSignal):Promise<TmdbItem[]> {
+export async function searchTmdb(
+  query:string,
+  mediaType:MediaType,
+  year?:string,
+  signal?:AbortSignal,
+  language?:string,
+):Promise<TmdbItem[]> {
   const q=query.trim();
   if(!q) return [];
   const params:Record<string,string>={
     query:q,
-    language:process.env.TMDB_LANGUAGE?.trim()||'zh-CN',
+    language:language?.trim()||process.env.TMDB_LANGUAGE?.trim()||'zh-CN',
     include_adult:'false',
     page:'1',
   };
