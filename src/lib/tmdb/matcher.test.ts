@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalize, titleVariants } from './matcher';
+import { levenshtein, normalize, titleVariants } from './matcher';
 
 describe('titleVariants',()=>{
   it('splits Chinese and English bilingual movie titles',()=>{
@@ -17,5 +17,13 @@ describe('titleVariants',()=>{
 
   it('normalizes punctuation for matching',()=>{
     expect(normalize('Young-and-Dangerous 6')).toBe(normalize('Young and Dangerous 6'));
+  });
+
+  it('detects a one-character title typo',()=>{
+    expect(levenshtein(normalize('流L地球2'),normalize('流浪地球2'))).toBe(1);
+  });
+
+  it('does not collapse materially different titles',()=>{
+    expect(levenshtein(normalize('Negotiator'),normalize('Crisis Negotiators'))).toBeGreaterThan(1);
   });
 });
