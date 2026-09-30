@@ -186,8 +186,11 @@ export function listWorksForScrape(limit=50):LibraryWork[] {
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND COALESCE(w.manual_match,0)=0 AND COALESCE(w.scrape_status,'pending')='pending'
-GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ?
+WHERE w.provider=? AND COALESCE(w.manual_match,0)=0
+  AND COALESCE(w.scrape_status,'pending') IN ('pending','review','failed')
+GROUP BY w.id
+ORDER BY CASE COALESCE(w.scrape_status,'pending') WHEN 'pending' THEN 0 WHEN 'review' THEN 1 ELSE 2 END,w.updated_at DESC
+LIMIT ?
 `).all(SOURCE,clamp(limit,1,200));
   return (rows as unknown as DbWorkRow[]).map(mapWork);
 }
