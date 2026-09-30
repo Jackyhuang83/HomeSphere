@@ -11,6 +11,15 @@ describe('115 HLS stream selection',()=>{
     expect(selected.title).toBe('1080p');
   });
 
+  it('prefers 720p transcoding on Windows browsers',()=>{
+    const selected=__select115StreamForTest([
+      {url:'https://example.invalid/1080.m3u8',width:1920,height:1080,definition:4,title:'1080p'},
+      {url:'https://example.invalid/720.m3u8',width:1280,height:720,definition:3,title:'720p'},
+      {url:'https://example.invalid/480.m3u8',width:854,height:480,definition:2,title:'480p'},
+    ],'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/154.0.0.0 Safari/537.36');
+    expect(selected.title).toBe('720p');
+  });
+
   it('uses original only when no transcoded stream exists',()=>{
     const selected=__select115StreamForTest([
       {url:'https://example.invalid/original.m3u8',width:3840,height:2160,definition:100,title:'original'},
