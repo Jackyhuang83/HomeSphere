@@ -59,6 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_media_path ON media(provider, path);
   ensureColumn(db,'works','match_confidence','TEXT');
   ensureColumn(db,'works','manual_match','INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db,'works','region','TEXT');
+  ensureColumn(db,'works','is_animation','INTEGER');
   ensureColumn(db,'works','added_at','INTEGER');
   ensureColumn(db,'media','source_url','TEXT');
   db.exec("CREATE INDEX IF NOT EXISTS idx_works_scrape ON works(scrape_status);");
@@ -126,6 +127,7 @@ export function listWorks(opts?:{
   type?:'movie'|'tv';
   year?:string;
   region?:MediaRegion;
+  animation?:boolean;
   sort?:'recent';
 }):WorkListResult {
   const limit=clamp(opts?.limit??60,1,200);
@@ -136,6 +138,7 @@ export function listWorks(opts?:{
   if(opts?.type){where.push('w.media_type=?');params.push(opts.type);}
   if(opts?.year){where.push('w.year=?');params.push(opts.year);}
   if(opts?.region){where.push('w.region=?');params.push(opts.region);}
+  if(opts?.animation){where.push('COALESCE(w.is_animation,0)=1');}
 
   const whereSql=where.join(' AND ');
   const orderSql=opts?.sort==='recent'
@@ -216,32 +219,41 @@ LIMIT ?
 
 export function setWorkMatch(id:string,patch:{
   title:string; originalTitle?:string; year?:string; mediaType:'movie'|'tv'; tmdbId:number;
-  posterUrl?:string; backdropUrl?:string; overview?:string; region?:MediaRegion; scrapeStatus:ScrapeStatus;
+  posterUrl?:string; backdropUrl?:string; overview?:string; region?:MediaRegion; isAnimation?:boolean; scrapeStatus:ScrapeStatus;
   matchConfidence?:'high'|'medium'|'low'; scrapeError?:string; manualMatch?:boolean;
 }):void {
   database().prepare(`
-UPDATE works SET title=?,original_title=?,year=?,media_type=?,tmdb_id=?,poster_url=?,backdrop_url=?,overview=?,region=?,
+UPDATE works SET title=?,original_title=?,year=?,media_type=?,tmdb_id=?,poster_url=?,backdrop_url=?,overview=?,region=?,is_animation=?,
 scrape_status=?,scrape_error=?,match_confidence=?,manual_match=?,updated_at=?
 WHERE id=? AND provider=?
 `).run(
     patch.title,patch.originalTitle??null,patch.year??null,patch.mediaType,patch.tmdbId,
-    patch.posterUrl??null,patch.backdropUrl??null,patch.overview??null,patch.region??null,patch.scrapeStatus,
+    patch.posterUrl??null,patch.backdropUrl??null,patch.overview??null,patch.region??null,
+    patch.isAnimation===undefined?null:(patch.isAnimation?1:0),patch.scrapeStatus,
     patch.scrapeError??null,patch.matchConfidence??null,patch.manualMatch?1:0,Date.now(),id,SOURCE
   );
 }
 
-export function listWorksMissingRegion(limit=100):LibraryWork[] {
+export function listWorksMissingMetadata(limit=100):LibraryWork[] {
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND w.tmdb_id IS NOT NULL AND w.region IS NULL
+WHERE w.provider=? AND w.tmdb_id IS NOT NULL AND (w.region IS NULL OR w.is_animation IS NULL)
 GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ?
 `).all(SOURCE,clamp(limit,1,200));
   return (rows as unknown as DbWorkRow[]).map(mapWork);
 }
 
-export function setWorkRegion(id:string,region:MediaRegion):void {
-  database().prepare('UPDATE works SET region=? WHERE id=? AND provider=?').run(region,id,SOURCE);
+export function setWorkMetadata(id:string,region:MediaRegion|undefined,isAnimation:boolean|undefined):void {
+  database().prepare(`
+UPDATE works
+SET region=COALESCE(?,region),is_animation=COALESCE(?,is_animation)
+WHERE id=? AND provider=?
+`).run(
+    region??null,
+    isAnimation===undefined?null:(isAnimation?1:0),
+    id,SOURCE
+  );
 }
 
 export function setWorkScrapeState(id:string,status:ScrapeStatus,error?:string):void {
@@ -295,7 +307,7 @@ export function reconcileMedia(currentIds:string[]):void {
 
 interface DbWorkRow {
   id:string;group_key:string;title:string;original_title:string|null;year:string|null;media_type:string;
-  tmdb_id:number|null;poster_url:string|null;backdrop_url:string|null;overview:string|null;region:string|null;
+  tmdb_id:number|null;poster_url:string|null;backdrop_url:string|null;overview:string|null;region:string|null;is_animation:number|null;
   scrape_status:string|null;scrape_error:string|null;match_confidence:string|null;manual_match:number|null;
   added_at:number|null;updated_at:number;file_count:number;
 }
@@ -309,6 +321,7 @@ function mapWork(row:DbWorkRow):LibraryWork {
     year:row.year??undefined,mediaType:row.media_type as LibraryWork['mediaType'],tmdbId:row.tmdb_id??undefined,
     posterUrl:row.poster_url??undefined,backdropUrl:row.backdrop_url??undefined,overview:row.overview??undefined,
     region:(row.region as LibraryWork['region'])??undefined,
+    isAnimation:row.is_animation===null?undefined:row.is_animation===1,
     scrapeStatus:(row.scrape_status||'pending') as LibraryWork['scrapeStatus'],
     scrapeError:row.scrape_error??undefined,matchConfidence:(row.match_confidence as LibraryWork['matchConfidence'])??undefined,
     manualMatch:row.manual_match===1,fileCount:Number(row.file_count||0),
