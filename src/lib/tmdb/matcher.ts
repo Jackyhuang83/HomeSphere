@@ -44,8 +44,17 @@ async function searchQueries(
   const merged=new Map<number,TmdbItem>();
   for(const query of queries){
     signal?.throwIfAborted();
-    const items=await searchTmdb(query,mediaType,year,signal);
-    for(const item of items) if(!merged.has(item.id)) merged.set(item.id,item);
+
+    // TMDB search results are localized. For Latin release titles, search
+    // English first so "Green Snake", "Detective Chinatown", etc. can be
+    // compared against the exact title the STRM actually contains.
+    if(/[A-Za-z]/.test(query)){
+      const english=await searchTmdb(query,mediaType,year,signal,'en-US');
+      for(const item of english) if(!merged.has(item.id)) merged.set(item.id,item);
+    }
+
+    const localized=await searchTmdb(query,mediaType,year,signal);
+    for(const item of localized) if(!merged.has(item.id)) merged.set(item.id,item);
   }
   return [...merged.values()];
 }
@@ -79,6 +88,12 @@ export function titleVariants(value:string):string[] {
   const match=cjkThenLatin||latinThenCjk;
   if(match){
     variants.push(match[1].trim(),match[2].trim());
+  }
+
+  // Release names sometimes append "1" to the first film although TMDB
+  // stores the first instalment without that suffix.
+  for(const item of [...variants]){
+    if(/^[A-Za-z]/.test(item)&&/\s1$/.test(item)) variants.push(item.replace(/\s1$/,'').trim());
   }
 
   return [...new Set(variants.filter(item=>normalize(item).length>=2))];
