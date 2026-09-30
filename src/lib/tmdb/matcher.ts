@@ -1,5 +1,5 @@
 import type { LibraryWork } from '@/lib/library/types';
-import { searchTmdb, type TmdbItem } from './client';
+import { getTmdbAlternativeTitles, searchTmdb, type TmdbItem } from './client';
 
 export interface MatchResult {
   candidate:TmdbItem|null;
@@ -29,10 +29,110 @@ export async function matchWork(work:LibraryWork,signal?:AbortSignal):Promise<Ma
       return {candidate:best.item,confidence:'medium',reason:'标题匹配，年份相差不超过1年'};
     }
   }
+
+  const refined=await refineLowConfidence(ranked.slice(0,5),work,signal);
+  if(refined)return refined;
+
   if(!second || best.score-second.score>=3) {
     return {candidate:best.item,confidence:'low',reason:'候选领先但证据不足，需要人工确认'};
   }
   return {candidate:best.item,confidence:'low',reason:'存在多个相近候选，需要人工确认'};
+}
+
+async function refineLowConfidence(
+  ranked:Array<ReturnType<typeof score>>,
+  work:LibraryWork,
+  signal?:AbortSignal,
+):Promise<MatchResult|null> {
+  const expected=titleVariants(work.title).map(normalize).filter(Boolean);
+  const aliasMatches:Array<{item:TmdbItem;yearRank:number}>=[];
+  const nearMatches:Array<{item:TmdbItem;distance:number}>=[];
+
+  for(const candidate of ranked){
+    signal?.throwIfAborted();
+    const aliases=await getTmdbAlternativeTitles(candidate.item.mediaType,candidate.item.id,signal);
+    const candidateTitles=[
+      candidate.item.title,
+      candidate.item.originalTitle||'',
+      ...aliases,
+    ].map(normalize).filter(Boolean);
+
+    const aliasEqual=candidateTitles.some(title=>expected.includes(title));
+    if(aliasEqual){
+      const yearRank=yearCompatibility(work.year,candidate.item.year);
+      if(yearRank>=0) aliasMatches.push({item:candidate.item,yearRank});
+      continue;
+    }
+
+    if(work.year&&candidate.item.year&&work.year===candidate.item.year){
+      const distance=minTitleDistance(expected,candidateTitles);
+      if(distance<=1) nearMatches.push({item:candidate.item,distance});
+    }
+  }
+
+  aliasMatches.sort((a,b)=>b.yearRank-a.yearRank);
+  if(aliasMatches.length){
+    const first=aliasMatches[0];
+    const second=aliasMatches[1];
+    if(!second||first.yearRank>second.yearRank){
+      return {
+        candidate:first.item,
+        confidence:first.yearRank>=2?'high':'medium',
+        reason:first.yearRank>=2?'TMDB 别名和年份完全匹配':'TMDB 别名完全匹配',
+      };
+    }
+  }
+
+  nearMatches.sort((a,b)=>a.distance-b.distance);
+  if(nearMatches.length===1||nearMatches[0].distance<nearMatches[1].distance){
+    return {
+      candidate:nearMatches[0].item,
+      confidence:'medium',
+      reason:'标题仅差1个字符且年份完全匹配',
+    };
+  }
+
+  return null;
+}
+
+function yearCompatibility(expected?:string,actual?:string):number {
+  if(!expected||!actual)return 1;
+  const diff=Math.abs(Number(expected)-Number(actual));
+  if(diff===0)return 2;
+  if(diff===1)return 1;
+  return -1;
+}
+
+function minTitleDistance(expected:string[],candidateTitles:string[]):number {
+  let best=Number.POSITIVE_INFINITY;
+  for(const left of expected){
+    for(const right of candidateTitles){
+      if(Math.min(left.length,right.length)<4)continue;
+      best=Math.min(best,levenshtein(left,right));
+    }
+  }
+  return best;
+}
+
+export function levenshtein(left:string,right:string):number {
+  if(left===right)return 0;
+  if(!left.length)return right.length;
+  if(!right.length)return left.length;
+
+  let previous=Array.from({length:right.length+1},(_,index)=>index);
+  for(let i=1;i<=left.length;i++){
+    const current=[i];
+    for(let j=1;j<=right.length;j++){
+      const cost=left[i-1]===right[j-1]?0:1;
+      current[j]=Math.min(
+        current[j-1]+1,
+        previous[j]+1,
+        previous[j-1]+cost,
+      );
+    }
+    previous=current;
+  }
+  return previous[right.length];
 }
 
 async function searchQueries(
