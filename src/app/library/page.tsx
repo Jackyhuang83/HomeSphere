@@ -7,6 +7,7 @@ import { SiteFooter } from '@/components/site-footer';
 import type { LibraryWork } from '@/lib/library/types';
 
 type Filter='all'|'movie'|'tv';
+type CategoryFilter='all'|'recent'|'year-0'|'year-1'|'year-2'|'mainland'|'hmt'|'overseas';
 
 interface BridgeHealthView {
   ready:boolean;
@@ -21,6 +22,7 @@ export default function LibraryPage(){
   const [items,setItems]=useState<LibraryWork[]>([]);
   const [total,setTotal]=useState(0);
   const [filter,setFilter]=useState<Filter>('all');
+  const [category,setCategory]=useState<CategoryFilter>('all');
   const [query,setQuery]=useState('');
   const [activeQuery,setActiveQuery]=useState('');
   const [loading,setLoading]=useState(true);
@@ -35,9 +37,18 @@ export default function LibraryPage(){
   const load=useCallback(async()=>{
     setLoading(true);
     try{
+      const currentYear=new Date().getFullYear();
+      const params=new URLSearchParams({limit:'120'});
+      if(filter!=='all')params.set('type',filter);
+      if(category==='recent')params.set('sort','recent');
+      else if(category==='mainland'||category==='hmt'||category==='overseas')params.set('region',category);
+      else if(category.startsWith('year-')){
+        const offset=Number(category.slice(5));
+        params.set('year',String(currentYear-offset));
+      }
       const url=activeQuery
         ? `/api/library/search?q=${encodeURIComponent(activeQuery)}`
-        : `/api/library?limit=120${filter==='all'?'':`&type=${filter}`}`;
+        : `/api/library?${params.toString()}`;
       const res=await fetch(url,{cache:'no-store'});
       const data=await res.json();
       if(!res.ok)throw new Error(data.error||'片库读取失败');
@@ -49,7 +60,7 @@ export default function LibraryPage(){
       }
     }catch(error){setMessage(error instanceof Error?error.message:'片库读取失败');}
     finally{setLoading(false);}
-  },[activeQuery,filter]);
+  },[activeQuery,filter,category]);
 
   const loadBridgeHealth=useCallback(async()=>{
     try{
@@ -87,7 +98,8 @@ export default function LibraryPage(){
       if(!res.ok)throw new Error(data.error||'TMDB整理失败');
       const s=data.summary;
       const merged=s.merged?`，合并重复 ${s.merged}`:'';
-      setMessage(`TMDB整理完成：匹配 ${s.matched}，待确认 ${s.review}，失败 ${s.failed}${merged}`);
+      const regions=s.regionsUpdated?`，补全地区 ${s.regionsUpdated}`:'';
+      setMessage(`TMDB整理完成：匹配 ${s.matched}，待确认 ${s.review}，失败 ${s.failed}${merged}${regions}`);
       await load();
     }catch(error){setMessage(error instanceof Error?error.message:'TMDB整理失败');}
     finally{setScraping(false);}
@@ -129,17 +141,40 @@ export default function LibraryPage(){
           {activeQuery&&<button className="btn-ghost h-10 rounded-xl" type="button" onClick={()=>{setQuery('');setActiveQuery('');}}>清除</button>}
         </form>
 
-        {!activeQuery&&<div className="flex gap-2 mt-3 overflow-x-auto scrollbar-thin pb-0.5">
-          {([['all','全部'],['movie','电影'],['tv','剧集']] as const).map(([value,label])=>
-            <button
-              key={value}
-              className={`shrink-0 rounded-full px-4 py-1.5 text-sm border transition-colors ${filter===value?'bg-accent text-on-accent border-accent':'bg-chip text-muted border-line hover:text-content hover:bg-hover'}`}
-              onClick={()=>setFilter(value)}
-            >
-              {label}
-            </button>
-          )}
-        </div>}
+        {!activeQuery&&<>
+          <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-thin pb-0.5">
+            {([['all','全部'],['movie','电影'],['tv','剧集']] as const).map(([value,label])=>
+              <button
+                key={value}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-sm border transition-colors ${filter===value?'bg-accent text-on-accent border-accent':'bg-chip text-muted border-line hover:text-content hover:bg-hover'}`}
+                onClick={()=>setFilter(value)}
+              >
+                {label}
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 mt-2.5 overflow-x-auto scrollbar-thin pb-0.5">
+            {([
+              ['all','全部分类'],
+              ['recent','最近新增'],
+              ['year-0',String(new Date().getFullYear())],
+              ['year-1',String(new Date().getFullYear()-1)],
+              ['year-2',String(new Date().getFullYear()-2)],
+              ['mainland','中国内地'],
+              ['hmt','港澳台'],
+              ['overseas','海外'],
+            ] as const).map(([value,label])=>
+              <button
+                key={value}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm border transition-colors ${category===value?'bg-content text-page border-content':'bg-transparent text-muted border-line hover:text-content hover:bg-hover'}`}
+                onClick={()=>setCategory(value)}
+              >
+                {label}
+              </button>
+            )}
+          </div>
+        </>}
       </div>
 
       <details className="mb-6 rounded-xl border border-line bg-card">
