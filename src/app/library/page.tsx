@@ -6,7 +6,7 @@ import { Header } from '@/components/header';
 import { SiteFooter } from '@/components/site-footer';
 import type { LibraryWork } from '@/lib/library/types';
 
-type Filter='all'|'movie'|'tv';
+type Filter='all'|'movie'|'tv'|'animation';
 type CategoryFilter='all'|'recent'|'year-0'|'year-1'|'year-2'|'mainland'|'hmt'|'overseas';
 
 interface BridgeHealthView {
@@ -39,7 +39,8 @@ export default function LibraryPage(){
     try{
       const currentYear=new Date().getFullYear();
       const params=new URLSearchParams({limit:'120'});
-      if(filter!=='all')params.set('type',filter);
+      if(filter==='movie'||filter==='tv')params.set('type',filter);
+      else if(filter==='animation')params.set('animation','1');
       if(category==='recent')params.set('sort','recent');
       else if(category==='mainland'||category==='hmt'||category==='overseas')params.set('region',category);
       else if(category.startsWith('year-')){
@@ -143,7 +144,7 @@ export default function LibraryPage(){
 
         {!activeQuery&&<>
           <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-thin pb-0.5">
-            {([['all','全部'],['movie','电影'],['tv','剧集']] as const).map(([value,label])=>
+            {([['all','全部'],['movie','电影'],['tv','剧集'],['animation','动画']] as const).map(([value,label])=>
               <button
                 key={value}
                 className={`shrink-0 rounded-full px-4 py-1.5 text-sm border transition-colors ${filter===value?'bg-accent text-on-accent border-accent':'bg-chip text-muted border-line hover:text-content hover:bg-hover'}`}
