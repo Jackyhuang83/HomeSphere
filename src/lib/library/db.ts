@@ -60,7 +60,6 @@ CREATE INDEX IF NOT EXISTS idx_media_path ON media(provider, path);
   ensureColumn(db,'works','manual_match','INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db,'works','region','TEXT');
   ensureColumn(db,'works','added_at','INTEGER');
-  db.exec('UPDATE works SET added_at=updated_at WHERE added_at IS NULL');
   ensureColumn(db,'media','source_url','TEXT');
   db.exec("CREATE INDEX IF NOT EXISTS idx_works_scrape ON works(scrape_status);");
 
@@ -86,6 +85,7 @@ ON CONFLICT(id) DO UPDATE SET
   title=CASE WHEN COALESCE(works.scrape_status,'pending') IN ('matched','manual') THEN works.title ELSE excluded.title END,
   year=CASE WHEN COALESCE(works.scrape_status,'pending') IN ('matched','manual') THEN works.year ELSE COALESCE(works.year, excluded.year) END,
   media_type=CASE WHEN COALESCE(works.scrape_status,'pending') IN ('matched','manual') THEN works.media_type ELSE excluded.media_type END,
+  added_at=COALESCE(works.added_at,excluded.added_at),
   updated_at=excluded.updated_at
 `).run(
     work.id,SOURCE,work.groupKey,work.title,work.year??null,work.mediaType,
