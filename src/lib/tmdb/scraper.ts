@@ -1,13 +1,13 @@
-import { getWork, listWorksForScrape, setWorkMatch, setWorkScrapeState } from '@/lib/library/db';
+import { getWork, listWorksForScrape, mergeDuplicateTmdbWorks, setWorkMatch, setWorkScrapeState } from '@/lib/library/db';
 import { getTmdbDetails, tmdbConfigured } from './client';
 import { matchWork } from './matcher';
 
-export interface ScrapeSummary {requested:number;matched:number;review:number;failed:number;}
+export interface ScrapeSummary {requested:number;matched:number;review:number;failed:number;merged:number;}
 
 export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<ScrapeSummary>{
   if(!tmdbConfigured()) throw new Error('未配置 TMDB_API_TOKEN');
   const works=listWorksForScrape(limit);
-  const summary:ScrapeSummary={requested:works.length,matched:0,review:0,failed:0};
+  const summary:ScrapeSummary={requested:works.length,matched:0,review:0,failed:0,merged:0};
   for(const work of works){
     signal?.throwIfAborted();
     try{
@@ -27,6 +27,7 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
       summary.failed++;
     }
   }
+  summary.merged=mergeDuplicateTmdbWorks();
   return summary;
 }
 
