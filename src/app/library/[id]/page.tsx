@@ -91,7 +91,7 @@ export default function WorkPage(){
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
-          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone 使用原生 HLS；Windows 通过本机播放助手连接 115。视频字节不经过 VPS。</p>
+          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone/iPad 使用原生 HLS；Windows 强制通过本机播放助手 + hls.js 连接 115。视频字节不经过 VPS。</p>
         </div>
         <aside className="card p-4">
           <div className="flex gap-3">
@@ -182,7 +182,10 @@ function HlsVideo({src,mediaId,onFatalError}:{src:string;mediaId:string;onFatalE
       }
     };
 
-    const nativeHls=video.canPlayType('application/vnd.apple.mpegurl')!=='';
+    // Windows Chrome/Edge may report HLS capability through the OS media stack
+    // while still failing on 115 HLS. Never let Windows bypass the localhost helper.
+    const isWindows=/Windows NT/i.test(navigator.userAgent);
+    const nativeHls=!isWindows&&video.canPlayType('application/vnd.apple.mpegurl')!=='';
     if(nativeHls){
       video.src=src;
     }else{
