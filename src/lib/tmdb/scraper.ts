@@ -1,4 +1,4 @@
-import { getWork, listWorksForScrape, listWorksMissingRegion, mergeDuplicateTmdbWorks, setWorkMatch, setWorkRegion, setWorkScrapeState } from '@/lib/library/db';
+import { getWork, listWorksForScrape, listWorksMissingMetadata, mergeDuplicateTmdbWorks, setWorkMatch, setWorkMetadata, setWorkScrapeState } from '@/lib/library/db';
 import { getTmdbDetails, tmdbConfigured } from './client';
 import type { MediaRegion } from '@/lib/library/types';
 import { matchWork } from './matcher';
@@ -20,7 +20,7 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
       setWorkMatch(work.id,{
         title:details.title||work.title,originalTitle:details.originalTitle,year:details.year||work.year,
         mediaType:details.mediaType,tmdbId:details.id,posterUrl:details.posterUrl,backdropUrl:details.backdropUrl,
-        overview:details.overview,region:classifyRegion(details.countryCodes),
+        overview:details.overview,region:classifyRegion(details.countryCodes),isAnimation:details.isAnimation,
         scrapeStatus:'matched',matchConfidence:confidence,manualMatch:false,
       });
       summary.matched++;
@@ -31,14 +31,15 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
   }
   summary.merged=mergeDuplicateTmdbWorks();
 
-  const missingRegions=listWorksMissingRegion(100);
-  for(const work of missingRegions){
+  const missingMetadata=listWorksMissingMetadata(100);
+  for(const work of missingMetadata){
     signal?.throwIfAborted();
     if(!work.tmdbId)continue;
     try{
       const details=await getTmdbDetails(work.mediaType,work.tmdbId,signal);
       const region=classifyRegion(details?.countryCodes);
-      if(region){setWorkRegion(work.id,region);summary.regionsUpdated++;}
+      setWorkMetadata(work.id,region,details?.isAnimation);
+      if(region)summary.regionsUpdated++;
     }catch{}
   }
 
@@ -54,7 +55,7 @@ export async function applyManualMatch(workId:string,mediaType:'movie'|'tv',tmdb
   setWorkMatch(workId,{
     title:details.title||work.title,originalTitle:details.originalTitle,year:details.year||work.year,
     mediaType,tmdbId,posterUrl:details.posterUrl,backdropUrl:details.backdropUrl,overview:details.overview,
-    region:classifyRegion(details.countryCodes),
+    region:classifyRegion(details.countryCodes),isAnimation:details.isAnimation,
     scrapeStatus:'manual',matchConfidence:'high',manualMatch:true,
   });
 }
