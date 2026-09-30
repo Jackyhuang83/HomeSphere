@@ -59,7 +59,7 @@ async function syncStrmLibraryUnlocked(signal?:AbortSignal):Promise<StrmSyncSumm
       if(!sourceUrl){invalidFiles++;continue;}
 
       const relative=path.relative(root,fullPath).split(path.sep).join('/');
-      const parsed=parseMediaName(entry.name);
+      const parsed=parseMediaName(entry.name,findContextTitle(relative));
       const groupKey=buildGroupKey(parsed.mediaType,parsed.title,parsed.year);
       const workId=makeWorkId(groupKey);
       const mediaId=makeMediaId(relative);
@@ -79,6 +79,17 @@ async function syncStrmLibraryUnlocked(signal?:AbortSignal):Promise<StrmSyncSumm
   }
   reconcileMedia([...mediaIds]);
   return {root,directoriesScanned,entriesSeen,strmFilesIndexed,worksIndexed:works.size,invalidFiles,startedAt,finishedAt:Date.now()};
+}
+
+function findContextTitle(relativePath:string):string|undefined {
+  const parts=relativePath.split('/').slice(0,-1).reverse();
+  for(const raw of parts){
+    const value=raw.normalize('NFKC').trim();
+    if(!value)continue;
+    if(/^(?:s(?:eason)?\s*\d+|第\s*\d+\s*季|movies?|films?|电影|华语电影|国产电影|电视剧|剧集|tv|series|media|影视|视频|(?:19|20)\d{2})$/i.test(value))continue;
+    return value;
+  }
+  return undefined;
 }
 
 async function readStrmUrl(filePath:string):Promise<string|null> {
