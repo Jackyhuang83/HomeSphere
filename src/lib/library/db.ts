@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { LibraryWork, LibraryWorkDetail, MediaItem, ScrapeStatus, WorkListResult } from './types';
+import type { LibraryWork, LibraryWorkDetail, MediaItem, MediaRegion, ScrapeStatus, WorkListResult } from './types';
 
 let db:DatabaseSync|null=null;
 const SOURCE='strm';
@@ -58,6 +58,9 @@ CREATE INDEX IF NOT EXISTS idx_media_path ON media(provider, path);
   ensureColumn(db,'works','scrape_error','TEXT');
   ensureColumn(db,'works','match_confidence','TEXT');
   ensureColumn(db,'works','manual_match','INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db,'works','region','TEXT');
+  ensureColumn(db,'works','added_at','INTEGER');
+  db.exec('UPDATE works SET added_at=updated_at WHERE added_at IS NULL');
   ensureColumn(db,'media','source_url','TEXT');
   db.exec("CREATE INDEX IF NOT EXISTS idx_works_scrape ON works(scrape_status);");
 
@@ -77,8 +80,8 @@ export function makeMediaId(remotePath:string):string {
 
 export function upsertWork(work:Omit<LibraryWork,'fileCount'>):void {
   database().prepare(`
-INSERT INTO works (id,provider,group_key,title,year,media_type,poster_url,backdrop_url,overview,updated_at)
-VALUES (?,?,?,?,?,?,?,?,?,?)
+INSERT INTO works (id,provider,group_key,title,year,media_type,poster_url,backdrop_url,overview,region,added_at,updated_at)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(id) DO UPDATE SET
   title=CASE WHEN COALESCE(works.scrape_status,'pending') IN ('matched','manual') THEN works.title ELSE excluded.title END,
   year=CASE WHEN COALESCE(works.scrape_status,'pending') IN ('matched','manual') THEN works.year ELSE COALESCE(works.year, excluded.year) END,
@@ -86,7 +89,8 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at=excluded.updated_at
 `).run(
     work.id,SOURCE,work.groupKey,work.title,work.year??null,work.mediaType,
-    work.posterUrl??null,work.backdropUrl??null,work.overview??null,work.updatedAt
+    work.posterUrl??null,work.backdropUrl??null,work.overview??null,work.region??null,
+    work.addedAt??work.updatedAt,work.updatedAt
   );
 }
 
@@ -116,26 +120,41 @@ ON CONFLICT(id) DO UPDATE SET
   );
 }
 
-export function listWorks(opts?:{limit?:number;offset?:number;type?:'movie'|'tv'}):WorkListResult {
+export function listWorks(opts?:{
+  limit?:number;
+  offset?:number;
+  type?:'movie'|'tv';
+  year?:string;
+  region?:MediaRegion;
+  sort?:'recent';
+}):WorkListResult {
   const limit=clamp(opts?.limit??60,1,200);
   const offset=Math.max(0,Math.trunc(opts?.offset??0));
-  const type=opts?.type;
-  const rows=type
-    ? database().prepare(`
+  const where=['w.provider=?'];
+  const params:Array<string|number>=[SOURCE];
+
+  if(opts?.type){where.push('w.media_type=?');params.push(opts.type);}
+  if(opts?.year){where.push('w.year=?');params.push(opts.year);}
+  if(opts?.region){where.push('w.region=?');params.push(opts.region);}
+
+  const whereSql=where.join(' AND ');
+  const orderSql=opts?.sort==='recent'
+    ? 'COALESCE(w.added_at,w.updated_at) DESC,w.title COLLATE NOCASE'
+    : 'w.updated_at DESC';
+
+  const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND w.media_type=?
-GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ? OFFSET ?
-`).all(SOURCE,type,limit,offset)
-    : database().prepare(`
-SELECT w.*,COUNT(m.id) file_count
-FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=?
-GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ? OFFSET ?
-`).all(SOURCE,limit,offset);
-  const countRow=type
-    ? database().prepare('SELECT COUNT(*) n FROM works WHERE provider=? AND media_type=?').get(SOURCE,type) as {n:number}
-    : database().prepare('SELECT COUNT(*) n FROM works WHERE provider=?').get(SOURCE) as {n:number};
+WHERE ${whereSql}
+GROUP BY w.id
+ORDER BY ${orderSql}
+LIMIT ? OFFSET ?
+`).all(...params,limit,offset);
+
+  const countRow=database().prepare(`
+SELECT COUNT(*) n FROM works w WHERE ${whereSql}
+`).get(...params) as {n:number};
+
   return {items:(rows as unknown as DbWorkRow[]).map(mapWork),total:Number(countRow.n)};
 }
 
@@ -197,18 +216,32 @@ LIMIT ?
 
 export function setWorkMatch(id:string,patch:{
   title:string; originalTitle?:string; year?:string; mediaType:'movie'|'tv'; tmdbId:number;
-  posterUrl?:string; backdropUrl?:string; overview?:string; scrapeStatus:ScrapeStatus;
+  posterUrl?:string; backdropUrl?:string; overview?:string; region?:MediaRegion; scrapeStatus:ScrapeStatus;
   matchConfidence?:'high'|'medium'|'low'; scrapeError?:string; manualMatch?:boolean;
 }):void {
   database().prepare(`
-UPDATE works SET title=?,original_title=?,year=?,media_type=?,tmdb_id=?,poster_url=?,backdrop_url=?,overview=?,
+UPDATE works SET title=?,original_title=?,year=?,media_type=?,tmdb_id=?,poster_url=?,backdrop_url=?,overview=?,region=?,
 scrape_status=?,scrape_error=?,match_confidence=?,manual_match=?,updated_at=?
 WHERE id=? AND provider=?
 `).run(
     patch.title,patch.originalTitle??null,patch.year??null,patch.mediaType,patch.tmdbId,
-    patch.posterUrl??null,patch.backdropUrl??null,patch.overview??null,patch.scrapeStatus,
+    patch.posterUrl??null,patch.backdropUrl??null,patch.overview??null,patch.region??null,patch.scrapeStatus,
     patch.scrapeError??null,patch.matchConfidence??null,patch.manualMatch?1:0,Date.now(),id,SOURCE
   );
+}
+
+export function listWorksMissingRegion(limit=100):LibraryWork[] {
+  const rows=database().prepare(`
+SELECT w.*,COUNT(m.id) file_count
+FROM works w LEFT JOIN media m ON m.work_id=w.id
+WHERE w.provider=? AND w.tmdb_id IS NOT NULL AND w.region IS NULL
+GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ?
+`).all(SOURCE,clamp(limit,1,200));
+  return (rows as unknown as DbWorkRow[]).map(mapWork);
+}
+
+export function setWorkRegion(id:string,region:MediaRegion):void {
+  database().prepare('UPDATE works SET region=? WHERE id=? AND provider=?').run(region,id,SOURCE);
 }
 
 export function setWorkScrapeState(id:string,status:ScrapeStatus,error?:string):void {
@@ -262,9 +295,9 @@ export function reconcileMedia(currentIds:string[]):void {
 
 interface DbWorkRow {
   id:string;group_key:string;title:string;original_title:string|null;year:string|null;media_type:string;
-  tmdb_id:number|null;poster_url:string|null;backdrop_url:string|null;overview:string|null;
+  tmdb_id:number|null;poster_url:string|null;backdrop_url:string|null;overview:string|null;region:string|null;
   scrape_status:string|null;scrape_error:string|null;match_confidence:string|null;manual_match:number|null;
-  updated_at:number;file_count:number;
+  added_at:number|null;updated_at:number;file_count:number;
 }
 interface DbMediaRow {
   id:string;work_id:string;source_url:string|null;path:string;filename:string;title:string;year:string|null;
@@ -275,9 +308,11 @@ function mapWork(row:DbWorkRow):LibraryWork {
     id:row.id,groupKey:row.group_key,title:row.title,originalTitle:row.original_title??undefined,
     year:row.year??undefined,mediaType:row.media_type as LibraryWork['mediaType'],tmdbId:row.tmdb_id??undefined,
     posterUrl:row.poster_url??undefined,backdropUrl:row.backdrop_url??undefined,overview:row.overview??undefined,
+    region:(row.region as LibraryWork['region'])??undefined,
     scrapeStatus:(row.scrape_status||'pending') as LibraryWork['scrapeStatus'],
     scrapeError:row.scrape_error??undefined,matchConfidence:(row.match_confidence as LibraryWork['matchConfidence'])??undefined,
-    manualMatch:row.manual_match===1,fileCount:Number(row.file_count||0),updatedAt:row.updated_at,
+    manualMatch:row.manual_match===1,fileCount:Number(row.file_count||0),
+    addedAt:row.added_at??undefined,updatedAt:row.updated_at,
   };
 }
 function mapMedia(row:DbMediaRow):MediaItem {
