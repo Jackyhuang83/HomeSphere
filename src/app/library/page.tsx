@@ -107,43 +107,60 @@ export default function LibraryPage(){
 
   return <div className="min-h-screen flex flex-col">
     <Header/>
-    <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-content">我的片库</h1>
-          <p className="text-sm text-muted mt-1">来源：STRM。日常浏览与搜索只读本地 SQLite。</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-ghost h-10 flex-1 sm:flex-none" onClick={()=>void sync()} disabled={syncing||!libraryConfigured}>
-            {syncing?'同步中…':'同步STRM'}
-          </button>
-          <button className="btn-primary h-10 flex-1 sm:flex-none" onClick={()=>void scrape()} disabled={scraping||!tmdbReady}>
-            {scraping?'整理中…':'整理海报'}
-          </button>
+    <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 py-5 sm:py-7">
+      <div className="mb-5 sm:mb-6">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-content tracking-tight">我的片库</h1>
+            <p className="text-sm text-muted mt-1">{activeQuery?`搜索结果 · ${items.length} 部`:`共 ${total} 部作品`}</p>
+          </div>
         </div>
       </div>
 
       {!libraryConfigured&&<Notice>尚未挂载 STRM 目录。请把 Media Bridge 生成的 STRM 只读挂载到 <code>/media</code>。</Notice>}
       {!tmdbReady&&<Notice>尚未配置 <code>TMDB_API_TOKEN</code>；片库仍可使用，但不会自动补海报和简介。</Notice>}
-      {message&&<div className="mb-4 rounded-lg border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
-      {bridgeHealth&&<BridgeStatusCard health={bridgeHealth} probing={probing} onProbe={probeBridge}/>}
+      {message&&<div className="mb-4 rounded-xl border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
 
-      <form className="flex gap-2 mb-4" onSubmit={e=>{e.preventDefault();setActiveQuery(query.trim());}}>
-        <input className="input flex-1 h-10" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索自己的片库…"/>
-        <button className="btn-primary" type="submit">搜索</button>
-        {activeQuery&&<button className="btn-ghost" type="button" onClick={()=>{setQuery('');setActiveQuery('');}}>清除</button>}
-      </form>
+      <div className="mb-5 sm:mb-6 rounded-2xl border border-line/80 bg-surface/80 p-3 sm:p-4">
+        <form className="flex gap-2" onSubmit={e=>{e.preventDefault();setActiveQuery(query.trim());}}>
+          <input className="input flex-1 h-10 rounded-xl" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索电影、剧集…"/>
+          <button className="btn-primary h-10 rounded-xl px-4" type="submit">搜索</button>
+          {activeQuery&&<button className="btn-ghost h-10 rounded-xl" type="button" onClick={()=>{setQuery('');setActiveQuery('');}}>清除</button>}
+        </form>
 
-      {!activeQuery&&<div className="flex gap-2 mb-5">
-        {([['all','全部'],['movie','电影'],['tv','剧集']] as const).map(([value,label])=>
-          <button key={value} className={filter===value?'btn-primary':'btn-ghost'} onClick={()=>setFilter(value)}>{label}</button>
-        )}
-      </div>}
+        {!activeQuery&&<div className="flex gap-2 mt-3 overflow-x-auto scrollbar-thin pb-0.5">
+          {([['all','全部'],['movie','电影'],['tv','剧集']] as const).map(([value,label])=>
+            <button
+              key={value}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm border transition-colors ${filter===value?'bg-accent text-on-accent border-accent':'bg-chip text-muted border-line hover:text-content hover:bg-hover'}`}
+              onClick={()=>setFilter(value)}
+            >
+              {label}
+            </button>
+          )}
+        </div>}
+      </div>
 
-      <p className="text-xs text-faint mb-4">{activeQuery?`搜索到 ${items.length} 部作品`:`本地索引共 ${total} 部作品`}</p>
-      {loading?<div className="py-20 text-center text-muted">正在读取片库…</div>
+      <details className="mb-6 rounded-xl border border-line bg-card">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted hover:text-content">
+          片库管理
+        </summary>
+        <div className="border-t border-line px-4 py-4">
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <button className="btn-ghost h-10 sm:w-auto" onClick={()=>void sync()} disabled={syncing||!libraryConfigured}>
+              {syncing?'同步中…':'同步 STRM'}
+            </button>
+            <button className="btn-primary h-10 sm:w-auto" onClick={()=>void scrape()} disabled={scraping||!tmdbReady}>
+              {scraping?'整理中…':'整理海报'}
+            </button>
+          </div>
+          {bridgeHealth&&<BridgeStatusCard health={bridgeHealth} probing={probing} onProbe={probeBridge}/>}
+        </div>
+      </details>
+
+      {loading?<PosterSkeleton/>
         :items.length===0?<Empty activeQuery={activeQuery} canSync={libraryConfigured} syncing={syncing} sync={sync}/>
-        :<div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-3 gap-y-5">
+        :<div className="grid grid-cols-3 min-[480px]:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-x-3 sm:gap-x-4 gap-y-5 sm:gap-y-6">
           {items.map(item=><WorkCard key={item.id} item={item}/>)}
         </div>}
     </main>
@@ -180,22 +197,52 @@ function Notice({children}:{children:React.ReactNode}){
 }
 function WorkCard({item}:{item:LibraryWork}){
   const poster=item.posterUrl?`/api/image/${encodeURIComponent(item.posterUrl)}`:undefined;
-  const needsFix=item.scrapeStatus==='review'||item.scrapeStatus==='failed';
-  return <div className="min-w-0">
-    <Link href={`/library/${item.id}`} className="group block">
-      <div className="aspect-[2/3] rounded-lg overflow-hidden border border-line bg-card relative">
-        {poster?<img src={poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy"/>
-          :<div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card to-chip">{item.title}</div>}
-        <span className="absolute left-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">STRM</span>
-        {item.mediaType==='tv'&&<span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">{item.fileCount} 集</span>}
-        {item.scrapeStatus==='pending'&&<span className="absolute top-1.5 right-1.5 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5">待整理</span>}
-      </div>
-      <h2 className="mt-2 text-sm font-medium text-content truncate">{item.title}</h2>
-      <p className="text-xs text-faint truncate">{[item.year,item.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}</p>
-    </Link>
-    {needsFix&&<Link href={`/library/${item.id}/match`} className="mt-1 inline-block text-xs text-warning hover:underline">
-      {item.scrapeStatus==='review'?'需要确认匹配':'识别失败，手动修正'}
-    </Link>}
+  const statusLabel=item.scrapeStatus==='pending'?'待整理'
+    :item.scrapeStatus==='review'?'待确认'
+    :item.scrapeStatus==='failed'?'待修正'
+    :'';
+  return <Link href={`/library/${item.id}`} className="group block min-w-0">
+    <div className="aspect-[2/3] rounded-xl sm:rounded-2xl overflow-hidden bg-card relative shadow-sm ring-1 ring-line/80 transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-lg group-hover:ring-accent/30">
+      {poster
+        ?<img
+          src={poster}
+          alt={item.title}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
+          loading="lazy"
+        />
+        :<div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card via-chip to-hover">
+          <span className="line-clamp-3">{item.title}</span>
+        </div>}
+
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 via-black/15 to-transparent pointer-events-none"/>
+
+      <span className="absolute left-2 bottom-2 rounded-full bg-black/65 backdrop-blur-sm text-white text-[10px] px-2 py-0.5">
+        {item.mediaType==='movie'?'电影':`${item.fileCount} 集`}
+      </span>
+
+      {statusLabel&&<span className="absolute top-2 right-2 rounded-full bg-black/65 backdrop-blur-sm text-white text-[10px] px-2 py-0.5">
+        {statusLabel}
+      </span>}
+    </div>
+
+    <div className="pt-2 px-0.5">
+      <h2 className="text-[13px] sm:text-sm font-medium text-content leading-snug line-clamp-1 group-hover:text-accent transition-colors">
+        {item.title}
+      </h2>
+      <p className="mt-0.5 text-[11px] sm:text-xs text-faint line-clamp-1">
+        {[item.year,item.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}
+      </p>
+    </div>
+  </Link>;
+}
+
+function PosterSkeleton(){
+  return <div className="grid grid-cols-3 min-[480px]:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-x-3 sm:gap-x-4 gap-y-5 sm:gap-y-6" aria-hidden="true">
+    {Array.from({length:21}).map((_,index)=><div key={index} className="animate-pulse">
+      <div className="aspect-[2/3] rounded-xl sm:rounded-2xl bg-chip"/>
+      <div className="mt-2 h-3.5 rounded bg-chip w-4/5"/>
+      <div className="mt-1.5 h-3 rounded bg-chip w-2/5"/>
+    </div>)}
   </div>;
 }
 function Empty({activeQuery,canSync,syncing,sync}:{activeQuery:string;canSync:boolean;syncing:boolean;sync:()=>Promise<void>}){
