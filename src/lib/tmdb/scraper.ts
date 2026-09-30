@@ -1,13 +1,14 @@
-import { getWork, listWorksForScrape, mergeDuplicateTmdbWorks, setWorkMatch, setWorkScrapeState } from '@/lib/library/db';
+import { getWork, listWorksForScrape, listWorksMissingRegion, mergeDuplicateTmdbWorks, setWorkMatch, setWorkRegion, setWorkScrapeState } from '@/lib/library/db';
 import { getTmdbDetails, tmdbConfigured } from './client';
+import type { MediaRegion } from '@/lib/library/types';
 import { matchWork } from './matcher';
 
-export interface ScrapeSummary {requested:number;matched:number;review:number;failed:number;merged:number;}
+export interface ScrapeSummary {requested:number;matched:number;review:number;failed:number;merged:number;regionsUpdated:number;}
 
 export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<ScrapeSummary>{
   if(!tmdbConfigured()) throw new Error('未配置 TMDB_API_TOKEN');
   const works=listWorksForScrape(limit);
-  const summary:ScrapeSummary={requested:works.length,matched:0,review:0,failed:0,merged:0};
+  const summary:ScrapeSummary={requested:works.length,matched:0,review:0,failed:0,merged:0,regionsUpdated:0};
   for(const work of works){
     signal?.throwIfAborted();
     try{
@@ -19,7 +20,8 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
       setWorkMatch(work.id,{
         title:details.title||work.title,originalTitle:details.originalTitle,year:details.year||work.year,
         mediaType:details.mediaType,tmdbId:details.id,posterUrl:details.posterUrl,backdropUrl:details.backdropUrl,
-        overview:details.overview,scrapeStatus:'matched',matchConfidence:confidence,manualMatch:false,
+        overview:details.overview,region:classifyRegion(details.countryCodes),
+        scrapeStatus:'matched',matchConfidence:confidence,manualMatch:false,
       });
       summary.matched++;
     }catch(error){
@@ -28,6 +30,18 @@ export async function scrapePendingWorks(limit=50,signal?:AbortSignal):Promise<S
     }
   }
   summary.merged=mergeDuplicateTmdbWorks();
+
+  const missingRegions=listWorksMissingRegion(100);
+  for(const work of missingRegions){
+    signal?.throwIfAborted();
+    if(!work.tmdbId)continue;
+    try{
+      const details=await getTmdbDetails(work.mediaType,work.tmdbId,signal);
+      const region=classifyRegion(details?.countryCodes);
+      if(region){setWorkRegion(work.id,region);summary.regionsUpdated++;}
+    }catch{}
+  }
+
   return summary;
 }
 
@@ -40,6 +54,16 @@ export async function applyManualMatch(workId:string,mediaType:'movie'|'tv',tmdb
   setWorkMatch(workId,{
     title:details.title||work.title,originalTitle:details.originalTitle,year:details.year||work.year,
     mediaType,tmdbId,posterUrl:details.posterUrl,backdropUrl:details.backdropUrl,overview:details.overview,
+    region:classifyRegion(details.countryCodes),
     scrapeStatus:'manual',matchConfidence:'high',manualMatch:true,
   });
+}
+
+
+export function classifyRegion(countryCodes?:string[]):MediaRegion|undefined{
+  const codes=(countryCodes||[]).map(code=>code.toUpperCase());
+  if(codes.some(code=>code==='HK'||code==='MO'||code==='TW'))return 'hmt';
+  if(codes.includes('CN'))return 'mainland';
+  if(codes.length)return 'overseas';
+  return undefined;
 }
