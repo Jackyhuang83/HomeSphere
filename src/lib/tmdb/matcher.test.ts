@@ -11,6 +11,10 @@ describe('titleVariants',()=>{
     expect(titleVariants('Twilight of the Warriors Walled In')).toEqual(['Twilight of the Warriors Walled In']);
   });
 
+  it('adds a no-suffix variant for first-film release titles',()=>{
+    expect(titleVariants('Young and Dangerous 1')).toEqual(['Young and Dangerous 1','Young and Dangerous']);
+  });
+
   it('normalizes punctuation for matching',()=>{
     expect(normalize('Young-and-Dangerous 6')).toBe(normalize('Young and Dangerous 6'));
   });
