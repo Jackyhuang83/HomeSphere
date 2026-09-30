@@ -53,6 +53,19 @@ export async function searchTmdb(
   return (data.results||[]).slice(0,12).map(item=>mapItem(item,mediaType));
 }
 
+export async function getTmdbAlternativeTitles(mediaType:MediaType,id:number,signal?:AbortSignal):Promise<string[]> {
+  try{
+    if(mediaType==='movie'){
+      const data=await tmdbFetch<{titles?:Array<{title?:string}>}>(`/movie/${id}/alternative_titles`,{},signal);
+      return [...new Set((data.titles||[]).map(item=>item.title?.trim()).filter((item):item is string=>Boolean(item)))];
+    }
+    const data=await tmdbFetch<{results?:Array<{title?:string}>}>(`/tv/${id}/alternative_titles`,{},signal);
+    return [...new Set((data.results||[]).map(item=>item.title?.trim()).filter((item):item is string=>Boolean(item)))];
+  }catch{
+    return [];
+  }
+}
+
 export async function getTmdbDetails(mediaType:MediaType,id:number,signal?:AbortSignal):Promise<TmdbItem|null> {
   try{
     const data=await tmdbFetch<RawItem>(`/${mediaType}/${id}`,{language:process.env.TMDB_LANGUAGE?.trim()||'zh-CN'},signal);
