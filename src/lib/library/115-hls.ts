@@ -84,7 +84,7 @@ export async function resolve115HlsPlayback(
   const streams=(root.video_url||[]).filter(item=>typeof item.url==='string'&&item.url.length>0);
   if(!streams.length) throw new Error('115 播放接口没有返回 HLS 地址');
 
-  const selected=selectBrowserCompatibleStream(streams);
+  const selected=selectBrowserCompatibleStream(streams,userAgent);
   const masterUrl=new URL(selected.url!);
   ensureHttp(masterUrl);
   await ensurePublic(masterUrl,'115 主播放清单');
@@ -201,11 +201,23 @@ export function __rewrite115MasterForTest(text:string,base:string):string{
   return rewriteMasterPlaylistText(text,new URL(base)).playlist;
 }
 
-function selectBrowserCompatibleStream(streams:V115VideoUrl[]):V115VideoUrl{
-  // 115 的 definition=100 是原画。网页端优先使用 115 转码流：
-  // 转码流通常包含更适合 HLS / 移动浏览器的音视频轨道。
-  // 只有完全没有转码流时，才退回原画。
+function selectBrowserCompatibleStream(streams:V115VideoUrl[],userAgent=''):V115VideoUrl{
+  // 115 的 definition=100 是原画。网页端优先使用转码流。
   const transcoded=streams.filter(item=>item.definition!==100);
+
+  // Windows Chrome/Edge 通过 hls.js + MSE 播放。
+  // 优先 720P（definition=3）以避开部分高档转码的 HEVC/H.265 兼容问题。
+  if(/Windows NT/i.test(userAgent)){
+    const preference=[3,2,1,4,5];
+    for(const definition of preference){
+      const match=transcoded.find(item=>item.definition===definition);
+      if(match)return match;
+    }
+    if(transcoded.length){
+      return [...transcoded].sort((a,b)=>streamScore(a)-streamScore(b))[0];
+    }
+  }
+
   const candidates=transcoded.length?transcoded:streams;
   return [...candidates].sort((a,b)=>streamScore(b)-streamScore(a))[0];
 }
@@ -214,8 +226,8 @@ function streamScore(item:V115VideoUrl):number{
   return Math.max(0,item.width||0)*Math.max(0,item.height||0)*1000+Math.max(0,item.definition||0);
 }
 
-export function __select115StreamForTest(streams:V115VideoUrl[]):V115VideoUrl{
-  return selectBrowserCompatibleStream(streams);
+export function __select115StreamForTest(streams:V115VideoUrl[],userAgent=''):V115VideoUrl{
+  return selectBrowserCompatibleStream(streams,userAgent);
 }
 
 async function ensurePublic(url:URL,label:string):Promise<void>{
