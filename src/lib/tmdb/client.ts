@@ -14,6 +14,7 @@ export interface TmdbItem {
   posterUrl?:string;
   backdropUrl?:string;
   overview?:string;
+  countryCodes?:string[];
 }
 
 interface RawItem {
@@ -27,6 +28,8 @@ interface RawItem {
   poster_path?:string|null;
   backdrop_path?:string|null;
   overview?:string;
+  origin_country?:string[];
+  production_countries?:Array<{iso_3166_1?:string}>;
 }
 
 export function tmdbConfigured():boolean {
@@ -101,5 +104,11 @@ function mapItem(raw:RawItem,mediaType:MediaType):TmdbItem{
     posterUrl:raw.poster_path?`${IMAGE_BASE}/w500${raw.poster_path}`:undefined,
     backdropUrl:raw.backdrop_path?`${IMAGE_BASE}/w780${raw.backdrop_path}`:undefined,
     overview:raw.overview||undefined,
+    countryCodes:[
+      ...new Set([
+        ...(raw.production_countries||[]).map(item=>item.iso_3166_1||''),
+        ...(raw.origin_country||[]),
+      ].map(code=>code.trim().toUpperCase()).filter(Boolean))
+    ],
   };
 }
