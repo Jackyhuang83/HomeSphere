@@ -86,7 +86,8 @@ export default function LibraryPage(){
       const data=await res.json();
       if(!res.ok)throw new Error(data.error||'TMDB整理失败');
       const s=data.summary;
-      setMessage(`TMDB整理完成：匹配 ${s.matched}，待确认 ${s.review}，失败 ${s.failed}`);
+      const merged=s.merged?`，合并重复 ${s.merged}`:'';
+      setMessage(`TMDB整理完成：匹配 ${s.matched}，待确认 ${s.review}，失败 ${s.failed}${merged}`);
       await load();
     }catch(error){setMessage(error instanceof Error?error.message:'TMDB整理失败');}
     finally{setScraping(false);}
