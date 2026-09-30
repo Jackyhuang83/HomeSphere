@@ -3,7 +3,7 @@ import type { MediaType } from './types';
 
 const VIDEO_EXT = new Set(['.mp4','.mkv','.m4v','.mov','.avi','.ts','.m2ts','.webm','.flv']);
 const NOISE = /\b(2160p|1080p|720p|4k|uhd|hdr10\+?|hdr|dv|dolby[ ._-]?vision|bluray|blu[ ._-]?ray|web[ ._-]?dl|webrip|remux|x26[45]|h26[45]|hevc|avc|aac|dts(?:-hd)?|truehd|atmos|10bit|8bit|60fps|50fps|24fps)\b/gi;
-const CN_NOISE = /(?:HD)?高清(?:1280|1920|1080|720)?|(?:国语|粤语|国粤|双语)(?:中字|字幕)?|(?:简体|繁体|简繁|中英)?(?:中字|字幕)|60帧|50帧/gi;
+const CN_NOISE = /4K(?:60|50|24)?帧?|(?:HD)?高清(?:1280|1920|1080|720)?|(?:国语|粤语|国粤|双语)(?:中字|字幕)?|(?:简体|繁体|简繁|中英)?(?:中字|字幕)|60帧|50帧/gi;
 const WATERMARK_PREFIX = /^(?:(?:魅力社[ ._-]*)?989pa[ ._-]*com|[\p{L}\p{N}]{2,24}[ ._-]+(?:com|net|org|cn|tv))[ ._-]*/iu;
 
 export interface ParsedMediaName {
