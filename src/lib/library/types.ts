@@ -30,6 +30,7 @@ export interface LibraryWork {
   backdropUrl?:string;
   overview?:string;
   region?:MediaRegion;
+  isAnimation?:boolean;
   scrapeStatus:ScrapeStatus;
   scrapeError?:string;
   matchConfidence?:'high'|'medium'|'low';
