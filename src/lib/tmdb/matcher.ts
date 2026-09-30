@@ -8,8 +8,12 @@ export interface MatchResult {
 }
 
 export async function matchWork(work:LibraryWork,signal?:AbortSignal):Promise<MatchResult> {
-  let results=await searchTmdb(work.title,work.mediaType,work.year,signal);
-  if(!results.length && work.year) results=await searchTmdb(work.title,work.mediaType,undefined,signal);
+  const queries=titleVariants(work.title).slice(0,3);
+  let results=await searchQueries(queries,work.mediaType,work.year,signal);
+
+  if(!results.length && work.year) {
+    results=await searchQueries(queries,work.mediaType,undefined,signal);
+  }
   if(!results.length) return {candidate:null,confidence:'none',reason:'TMDB 无匹配'};
 
   const ranked=results.map(item=>score(item,work)).sort((a,b)=>b.score-a.score);
@@ -31,12 +35,29 @@ export async function matchWork(work:LibraryWork,signal?:AbortSignal):Promise<Ma
   return {candidate:best.item,confidence:'low',reason:'存在多个相近候选，需要人工确认'};
 }
 
+async function searchQueries(
+  queries:string[],
+  mediaType:LibraryWork['mediaType'],
+  year:string|undefined,
+  signal?:AbortSignal,
+):Promise<TmdbItem[]> {
+  const merged=new Map<number,TmdbItem>();
+  for(const query of queries){
+    signal?.throwIfAborted();
+    const items=await searchTmdb(query,mediaType,year,signal);
+    for(const item of items) if(!merged.has(item.id)) merged.set(item.id,item);
+  }
+  return [...merged.values()];
+}
+
 function score(item:TmdbItem,work:LibraryWork) {
-  const expected=normalize(work.title);
+  const expected=titleVariants(work.title).map(normalize).filter(Boolean);
   const titles=[item.title,item.originalTitle || ''].map(normalize).filter(Boolean);
-  const titleEqual=titles.includes(expected);
+  const titleEqual=titles.some(title=>expected.includes(title));
+
   let value=titleEqual?4:0;
-  if(!titleEqual && expected.length>=2 && titles.some(t=>t.includes(expected)||expected.includes(t))) value+=1;
+  if(!titleEqual && expected.some(a=>a.length>=2&&titles.some(b=>b.includes(a)||a.includes(b)))) value+=1;
+
   let yearEqual=false;
   if(work.year && item.year) {
     const diff=Math.abs(Number(work.year)-Number(item.year));
@@ -45,6 +66,22 @@ function score(item:TmdbItem,work:LibraryWork) {
     else value-=1;
   }
   return {item,score:value,titleEqual,yearEqual};
+}
+
+export function titleVariants(value:string):string[] {
+  const full=value.normalize('NFKC').replace(/\s+/g,' ').trim();
+  if(!full)return [];
+
+  const variants=[full];
+  const cjkThenLatin=/^(.+?[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\d])\s+([A-Za-z][A-Za-z0-9'’:&+.,\- ]+)$/u.exec(full);
+  const latinThenCjk=/^([A-Za-z][A-Za-z0-9'’:&+.,\- ]+)\s+([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}].+)$/u.exec(full);
+
+  const match=cjkThenLatin||latinThenCjk;
+  if(match){
+    variants.push(match[1].trim(),match[2].trim());
+  }
+
+  return [...new Set(variants.filter(item=>normalize(item).length>=2))];
 }
 
 export function normalize(value:string):string {
