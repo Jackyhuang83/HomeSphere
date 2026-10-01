@@ -9,6 +9,8 @@ import type { LibraryWork } from '@/lib/library/types';
 
 type Filter='all'|'movie'|'tv'|'animation';
 type CategoryFilter='all'|'recent'|'year-0'|'year-1'|'year-2'|'year-3'|'mainland'|'hmt'|'overseas';
+type PersonalFilter='all'|'favorite'|'watchlist';
+type WatchFilter='all'|'inprogress'|'watched'|'unwatched';
 
 interface BridgeHealthView {
   ready:boolean;
@@ -24,6 +26,8 @@ export default function LibraryPage(){
   const [total,setTotal]=useState(0);
   const [filter,setFilter]=useState<Filter>('all');
   const [category,setCategory]=useState<CategoryFilter>('all');
+  const [personal,setPersonal]=useState<PersonalFilter>('all');
+  const [watchFilter,setWatchFilter]=useState<WatchFilter>('all');
   const [query,setQuery]=useState('');
   const [activeQuery,setActiveQuery]=useState('');
   const [loading,setLoading]=useState(true);
@@ -42,6 +46,8 @@ export default function LibraryPage(){
       const currentYear=new Date().getFullYear();
       const params=new URLSearchParams({limit:'120'});
       if(showHidden)params.set('hidden','1');
+      if(personal!=='all')params.set('personal',personal);
+      if(watchFilter!=='all')params.set('watch',watchFilter);
       if(filter==='movie'||filter==='tv')params.set('type',filter);
       else if(filter==='animation')params.set('animation','1');
       if(category==='recent')params.set('sort','recent');
@@ -51,7 +57,7 @@ export default function LibraryPage(){
         params.set('year',String(currentYear-offset));
       }
       const url=activeQuery
-        ? `/api/library/search?q=${encodeURIComponent(activeQuery)}${showHidden?'&hidden=1':''}`
+        ? (()=>{const searchParams=new URLSearchParams(params);searchParams.set('q',activeQuery);return `/api/library/search?${searchParams.toString()}`;})()
         : `/api/library?${params.toString()}`;
       const res=await fetch(url,{cache:'no-store'});
       const data=await res.json();
@@ -64,7 +70,7 @@ export default function LibraryPage(){
       }
     }catch(error){setMessage(error instanceof Error?error.message:'片库读取失败');}
     finally{setLoading(false);}
-  },[activeQuery,filter,category,showHidden]);
+  },[activeQuery,filter,category,personal,watchFilter,showHidden]);
 
   const loadBridgeHealth=useCallback(async()=>{
     try{
@@ -139,7 +145,7 @@ export default function LibraryPage(){
       {!tmdbReady&&<Notice>尚未配置 <code>TMDB_API_TOKEN</code>；片库仍可使用，但不会自动补海报和简介。</Notice>}
       {message&&<div className="mb-4 rounded-xl border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
 
-      <LibraryActivitySections />
+      {!showHidden&&<LibraryActivitySections />}
 
       <div className="mb-5 sm:mb-6 rounded-2xl border border-line/80 bg-surface/80 p-3 sm:p-4">
         <form className="flex gap-2" onSubmit={e=>{e.preventDefault();setActiveQuery(query.trim());}}>
@@ -148,7 +154,7 @@ export default function LibraryPage(){
           {activeQuery&&<button className="btn-ghost h-10 rounded-xl" type="button" onClick={()=>{setQuery('');setActiveQuery('');}}>清除</button>}
         </form>
 
-        {!activeQuery&&<>
+        <>
           <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-thin pb-0.5">
             {([['all','全部'],['movie','电影'],['tv','剧集'],['animation','动画']] as const).map(([value,label])=>
               <button
@@ -182,7 +188,35 @@ export default function LibraryPage(){
               </button>
             )}
           </div>
-        </>}
+          <details className="mt-3 rounded-xl border border-line/80 bg-card/60">
+            <summary className="cursor-pointer select-none px-3.5 py-2.5 text-sm text-muted hover:text-content">
+              更多筛选{personal!=='all'||watchFilter!=='all'?' · 已启用':''}
+            </summary>
+            <div className="border-t border-line px-3 py-3 space-y-3">
+              <div>
+                <div className="text-xs text-faint mb-2">个人整理</div>
+                <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-0.5">
+                  {([['all','全部'],['favorite','已收藏'],['watchlist','想看']] as const).map(([value,label])=>
+                    <button key={value} type="button"
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm border ${personal===value?'bg-content text-page border-content':'bg-transparent text-muted border-line hover:text-content hover:bg-hover'}`}
+                      onClick={()=>setPersonal(value)}>{label}</button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-faint mb-2">观看状态</div>
+                <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-0.5">
+                  {([['all','全部'],['inprogress','观看中'],['watched','已看完'],['unwatched','未观看']] as const).map(([value,label])=>
+                    <button key={value} type="button"
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm border ${watchFilter===value?'bg-content text-page border-content':'bg-transparent text-muted border-line hover:text-content hover:bg-hover'}`}
+                      onClick={()=>setWatchFilter(value)}>{label}</button>
+                  )}
+                </div>
+              </div>
+              {(personal!=='all'||watchFilter!=='all')&&<button type="button" className="text-xs text-muted hover:text-content" onClick={()=>{setPersonal('all');setWatchFilter('all');}}>清除更多筛选</button>}
+            </div>
+          </details>
+        </>
       </div>
 
       <details className="mb-6 rounded-xl border border-line bg-card">
