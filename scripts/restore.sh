@@ -36,11 +36,13 @@ for required in manifest.env homesphere.env app-files.tar.gz homesphere-data.tar
   [ -f "$TMP_DIR/$required" ] || fail "迁移包缺少 $required。"
 done
 
-# shellcheck disable=SC1091
-. "$TMP_DIR/manifest.env"
-[ "${HOMESPHERE_BACKUP_FORMAT:-}" = "1" ] || fail "不支持的迁移包格式。"
-if [ "${SOURCE_ARCH:-unknown}" != "$(uname -m)" ]; then
-  fail "旧 VPS 架构为 ${SOURCE_ARCH:-unknown}，新 VPS 为 $(uname -m)。当前物理 PostgreSQL 快照只允许同架构恢复。"
+HOMESPHERE_BACKUP_FORMAT="$(sed -n 's/^HOMESPHERE_BACKUP_FORMAT=//p' "$TMP_DIR/manifest.env" | head -n1)"
+HOMESPHERE_VERSION="$(sed -n 's/^HOMESPHERE_VERSION=//p' "$TMP_DIR/manifest.env" | head -n1)"
+SOURCE_ARCH="$(sed -n 's/^SOURCE_ARCH=//p' "$TMP_DIR/manifest.env" | head -n1)"
+[ "$HOMESPHERE_BACKUP_FORMAT" = "1" ] || fail "不支持的迁移包格式。"
+[[ "$SOURCE_ARCH" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "迁移包架构字段无效。"
+if [ "$SOURCE_ARCH" != "$(uname -m)" ]; then
+  fail "旧 VPS 架构为 $SOURCE_ARCH，新 VPS 为 $(uname -m)。当前物理 PostgreSQL 快照只允许同架构恢复。"
 fi
 
 cd "$APP_DIR"
