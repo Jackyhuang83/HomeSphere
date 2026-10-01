@@ -104,7 +104,7 @@ function mapItem(raw:RawItem,mediaType:MediaType):TmdbItem{
     id:raw.id,mediaType,title:raw.title||raw.name||'',
     originalTitle:raw.original_title||raw.original_name||undefined,
     year:date?date.slice(0,4):undefined,
-    posterUrl:raw.poster_path?`${IMAGE_BASE}/w342${raw.poster_path}`:undefined,
+    posterUrl:raw.poster_path?`${IMAGE_BASE}/w500${raw.poster_path}`:undefined,
     backdropUrl:raw.backdrop_path?`${IMAGE_BASE}/w780${raw.backdrop_path}`:undefined,
     overview:raw.overview||undefined,
     countryCodes:[
