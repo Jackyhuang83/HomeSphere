@@ -61,6 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_media_path ON media(provider, path);
   ensureColumn(db,'works','region','TEXT');
   ensureColumn(db,'works','is_animation','INTEGER');
   ensureColumn(db,'works','added_at','INTEGER');
+  ensureColumn(db,'works','hidden',"INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db,'media','source_url','TEXT');
   db.exec("CREATE INDEX IF NOT EXISTS idx_works_scrape ON works(scrape_status);");
 
@@ -129,6 +130,7 @@ export function listWorks(opts?:{
   region?:MediaRegion;
   animation?:boolean;
   sort?:'recent';
+  hidden?:boolean;
 }):WorkListResult {
   const limit=clamp(opts?.limit??60,1,200);
   const offset=Math.max(0,Math.trunc(opts?.offset??0));
@@ -139,6 +141,7 @@ export function listWorks(opts?:{
   if(opts?.year){where.push('w.year=?');params.push(opts.year);}
   if(opts?.region){where.push('w.region=?');params.push(opts.region);}
   if(opts?.animation){where.push('COALESCE(w.is_animation,0)=1');}
+  where.push(opts?.hidden?'COALESCE(w.hidden,0)=1':'COALESCE(w.hidden,0)=0');
 
   const whereSql=where.join(' AND ');
   const orderSql=opts?.sort==='recent'
@@ -161,14 +164,14 @@ SELECT COUNT(*) n FROM works w WHERE ${whereSql}
   return {items:(rows as unknown as DbWorkRow[]).map(mapWork),total:Number(countRow.n)};
 }
 
-export function searchWorks(query:string,limit=60):LibraryWork[] {
+export function searchWorks(query:string,limit=60,hidden=false):LibraryWork[] {
   const q=query.trim();
   if(!q) return [];
   const pattern=`%${escapeLike(q)}%`;
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND (w.title LIKE ? ESCAPE '\\' OR COALESCE(w.original_title,'') LIKE ? ESCAPE '\\')
+WHERE w.provider=? AND COALESCE(w.hidden,0)=${hidden?1:0} AND (w.title LIKE ? ESCAPE '\\' OR COALESCE(w.original_title,'') LIKE ? ESCAPE '\\')
 GROUP BY w.id
 ORDER BY CASE WHEN w.title=? THEN 0 ELSE 1 END,w.updated_at DESC
 LIMIT ?
@@ -208,7 +211,7 @@ export function listWorksForScrape(limit=50):LibraryWork[] {
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND COALESCE(w.manual_match,0)=0
+WHERE w.provider=? AND COALESCE(w.hidden,0)=0 AND COALESCE(w.manual_match,0)=0
   AND COALESCE(w.scrape_status,'pending') IN ('pending','review','failed')
 GROUP BY w.id
 ORDER BY CASE COALESCE(w.scrape_status,'pending') WHEN 'pending' THEN 0 WHEN 'review' THEN 1 ELSE 2 END,w.updated_at DESC
@@ -238,7 +241,7 @@ export function listWorksMissingMetadata(limit=100):LibraryWork[] {
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND w.tmdb_id IS NOT NULL AND (w.region IS NULL OR w.is_animation IS NULL)
+WHERE w.provider=? AND COALESCE(w.hidden,0)=0 AND w.tmdb_id IS NOT NULL AND (w.region IS NULL OR w.is_animation IS NULL)
 GROUP BY w.id ORDER BY w.updated_at DESC LIMIT ?
 `).all(SOURCE,clamp(limit,1,200));
   return (rows as unknown as DbWorkRow[]).map(mapWork);
@@ -278,7 +281,7 @@ SELECT w.id,w.manual_match,w.updated_at,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
 WHERE w.provider=? AND w.tmdb_id=? AND w.media_type=?
 GROUP BY w.id
-ORDER BY COALESCE(w.manual_match,0) DESC,COUNT(m.id) DESC,w.updated_at DESC
+ORDER BY COALESCE(w.hidden,0) ASC,COALESCE(w.manual_match,0) DESC,COUNT(m.id) DESC,w.updated_at DESC
 `).all(SOURCE,group.tmdb_id,group.media_type) as unknown as Array<{
       id:string;manual_match:number|null;updated_at:number;file_count:number;
     }>;
@@ -295,21 +298,28 @@ ORDER BY COALESCE(w.manual_match,0) DESC,COUNT(m.id) DESC,w.updated_at DESC
   return merged;
 }
 
-export function reconcileMedia(currentIds:string[]):void {
+export function setWorkHidden(id:string,hidden:boolean):boolean {
+  const result=database().prepare('UPDATE works SET hidden=?,updated_at=? WHERE id=? AND provider=?')
+    .run(hidden?1:0,Date.now(),id,SOURCE);
+  return Number(result.changes||0)>0;
+}
+
+export function reconcileMedia(currentIds:string[]):{removedMedia:number;removedWorks:number} {
   const conn=database();
   conn.exec('CREATE TEMP TABLE IF NOT EXISTS current_media_ids (id TEXT PRIMARY KEY)');
   conn.exec('DELETE FROM current_media_ids');
   const insert=conn.prepare('INSERT INTO current_media_ids (id) VALUES (?)');
   for(const id of currentIds) insert.run(id);
-  conn.prepare('DELETE FROM media WHERE provider=? AND id NOT IN (SELECT id FROM current_media_ids)').run(SOURCE);
-  conn.prepare('DELETE FROM works WHERE provider=? AND NOT EXISTS (SELECT 1 FROM media m WHERE m.work_id=works.id)').run(SOURCE);
+  const removedMedia=Number(conn.prepare('DELETE FROM media WHERE provider=? AND id NOT IN (SELECT id FROM current_media_ids)').run(SOURCE).changes||0);
+  const removedWorks=Number(conn.prepare('DELETE FROM works WHERE provider=? AND NOT EXISTS (SELECT 1 FROM media m WHERE m.work_id=works.id)').run(SOURCE).changes||0);
+  return {removedMedia,removedWorks};
 }
 
 interface DbWorkRow {
   id:string;group_key:string;title:string;original_title:string|null;year:string|null;media_type:string;
   tmdb_id:number|null;poster_url:string|null;backdrop_url:string|null;overview:string|null;region:string|null;is_animation:number|null;
   scrape_status:string|null;scrape_error:string|null;match_confidence:string|null;manual_match:number|null;
-  added_at:number|null;updated_at:number;file_count:number;
+  added_at:number|null;hidden:number|null;updated_at:number;file_count:number;
 }
 interface DbMediaRow {
   id:string;work_id:string;source_url:string|null;path:string;filename:string;title:string;year:string|null;
@@ -324,7 +334,7 @@ function mapWork(row:DbWorkRow):LibraryWork {
     isAnimation:row.is_animation===null?undefined:row.is_animation===1,
     scrapeStatus:(row.scrape_status||'pending') as LibraryWork['scrapeStatus'],
     scrapeError:row.scrape_error??undefined,matchConfidence:(row.match_confidence as LibraryWork['matchConfidence'])??undefined,
-    manualMatch:row.manual_match===1,fileCount:Number(row.file_count||0),
+    manualMatch:row.manual_match===1,hidden:row.hidden===1,fileCount:Number(row.file_count||0),
     addedAt:row.added_at??undefined,updatedAt:row.updated_at,
   };
 }

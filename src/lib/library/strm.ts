@@ -13,6 +13,8 @@ export interface StrmSyncSummary {
   strmFilesIndexed:number;
   worksIndexed:number;
   invalidFiles:number;
+  removedMedia:number;
+  removedWorks:number;
   startedAt:number;
   finishedAt:number;
 }
@@ -77,8 +79,8 @@ async function syncStrmLibraryUnlocked(signal?:AbortSignal):Promise<StrmSyncSumm
       mediaIds.add(mediaId);works.add(workId);strmFilesIndexed++;
     }
   }
-  reconcileMedia([...mediaIds]);
-  return {root,directoriesScanned,entriesSeen,strmFilesIndexed,worksIndexed:works.size,invalidFiles,startedAt,finishedAt:Date.now()};
+  const cleanup=reconcileMedia([...mediaIds]);
+  return {root,directoriesScanned,entriesSeen,strmFilesIndexed,worksIndexed:works.size,invalidFiles,removedMedia:cleanup.removedMedia,removedWorks:cleanup.removedWorks,startedAt,finishedAt:Date.now()};
 }
 
 function findContextTitle(relativePath:string):string|undefined {
