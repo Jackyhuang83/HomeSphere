@@ -26,6 +26,26 @@ func TestAllowedUpstream(t *testing.T) {
 	}
 }
 
+
+func TestNormalizeUpstreamUpgrades115HTTP(t *testing.T) {
+	u, _ := url.Parse("http://videoplay.115.com/path/master.m3u8?pickcode=abc")
+	got, err := normalizeUpstream(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scheme != "https" {
+		t.Fatalf("scheme = %s, want https", got.Scheme)
+	}
+	if got.Hostname() != "videoplay.115.com" {
+		t.Fatalf("host = %s", got.Hostname())
+	}
+
+	evil, _ := url.Parse("http://evil.example/path/master.m3u8")
+	if _, err := normalizeUpstream(evil); err == nil {
+		t.Fatal("expected non-115 host to be rejected")
+	}
+}
+
 func TestRewritePlaylist(t *testing.T) {
 	base, _ := url.Parse("https://cpats01.115.com/path/master.m3u8")
 	input := strings.Join([]string{
