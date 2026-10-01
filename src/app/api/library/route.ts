@@ -16,6 +16,8 @@ export async function GET(req:Request){
   const sort=url.searchParams.get('sort');
   const animation=url.searchParams.get('animation');
   const hidden=url.searchParams.get('hidden');
+  const personal=url.searchParams.get('personal');
+  const watchState=url.searchParams.get('watch');
   const result=listWorks({
     limit:Number(url.searchParams.get('limit')||60),
     offset:Number(url.searchParams.get('offset')||0),
@@ -25,6 +27,8 @@ export async function GET(req:Request){
     animation:animation==='1',
     sort:sort==='recent'?'recent':undefined,
     hidden:hidden==='1',
+    personal:personal==='favorite'||personal==='watchlist'?personal:undefined,
+    watchState:watchState==='watched'||watchState==='inprogress'||watchState==='unwatched'?watchState:undefined,
   });
   return NextResponse.json({...result,libraryConfigured:isLibraryConfigured(),tmdbConfigured:tmdbConfigured()},{
     headers:{'Cache-Control':'private, no-store'}
