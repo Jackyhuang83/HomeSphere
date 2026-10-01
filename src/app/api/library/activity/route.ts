@@ -5,6 +5,7 @@ import {
   getWorkActivityState,
   savePlaybackProgress,
   setWorkFavorite,
+  setWorkWatchlist,
 } from '@/lib/library/activity';
 
 export const runtime='nodejs';
@@ -38,11 +39,11 @@ export async function POST(req:Request){
     if(!ID_RE.test(mediaId))return jsonError('媒体 ID 无效',400);
     const position=Number(input.position);
     const duration=Number(input.duration);
-    if(!Number.isFinite(position)||!Number.isFinite(duration)||duration<=0){
+    if(!Number.isFinite(position)||!Number.isFinite(duration)||position<=0||duration<0){
       return jsonError('播放进度无效',400);
     }
     const progress=savePlaybackProgress(mediaId,position,duration);
-    if(!progress)return jsonError('媒体文件不存在或播放时长无效',404);
+    if(!progress)return jsonError('媒体文件不存在或播放进度无效',404);
     return NextResponse.json(progress,{headers:{'Cache-Control':'private, no-store'}});
   }
 
@@ -53,6 +54,15 @@ export async function POST(req:Request){
     }
     if(!setWorkFavorite(workId,input.favorite))return jsonError('作品不存在',404);
     return NextResponse.json({workId,favorite:input.favorite},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(input.action==='watchlist'){
+    const workId=typeof input.workId==='string'?input.workId.trim():'';
+    if(!ID_RE.test(workId)||typeof input.watchlist!=='boolean'){
+      return jsonError('想看参数无效',400);
+    }
+    if(!setWorkWatchlist(workId,input.watchlist))return jsonError('作品不存在',404);
+    return NextResponse.json({workId,watchlist:input.watchlist},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   return jsonError('不支持的操作',400);
