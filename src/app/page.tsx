@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { Header } from '@/components/header';
 import { RecommendSection } from '@/components/douban-section';
 import { SiteFooter } from '@/components/site-footer';
-import { LibraryActivitySections } from '@/components/library-activity-sections';
 
 export default function HomePage() {
   return (
@@ -18,7 +17,6 @@ export default function HomePage() {
             首次部署先看 <Link href="/setup" className="text-accent hover:underline">首次使用检查</Link>。
           </p>
         </section>
-        <LibraryActivitySections />
         <RecommendSection />
       </main>
       <SiteFooter />
