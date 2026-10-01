@@ -88,6 +88,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - 直播频道智能分类：CCTV / 卫视 / 香港 / 台湾 / 地方 / 亚洲 / 欧洲 / 美洲 / 非洲 / 其他
 - 直播 Direct-only：视频由客户端直连源站，HomeSphere 不提供直播视频代理
 - 首次使用检查页 `/setup`
+- 完整 VPS 迁移包：一键备份 / 恢复 HomeSphere、SQLite、QMediaSync PostgreSQL、STRM、配置与现有 Cloudflare Tunnel
 
 ## 快速开始
 

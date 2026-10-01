@@ -460,6 +460,62 @@ EOF
   done
 }
 
+migration_menu() {
+  while true; do
+    clear
+    cat <<'EOF'
+备份 / VPS 迁移
+================
+
+1. 创建完整迁移包
+2. 查看 /root 下的迁移包
+3. 从迁移包恢复
+0. 返回
+
+说明：
+- 迁移包包含家庭密码、115/QMediaSync 授权相关本地数据和 Tunnel Token（如已配置）；
+- 文件权限为 root-only 600；
+- 只通过 SSH / SCP 传输，不要上传到 GitHub、网盘或公开链接；
+- 恢复前会自动为新 VPS 当前状态再做一个回退快照。
+EOF
+    printf "\n请选择: "
+    read -r choice
+    case "$choice" in
+      1)
+        clear
+        bash "$APP_DIR/scripts/backup.sh"
+        pause
+        ;;
+      2)
+        clear
+        echo "HomeSphere 迁移包："
+        echo
+        ls -lh /root/homesphere-migration-*.tar.gz /root/homesphere-pre-restore-*.tar.gz 2>/dev/null || echo "暂无迁移包。"
+        pause
+        ;;
+      3)
+        clear
+        echo "请输入迁移包完整路径。"
+        echo "例如：/root/homesphere-migration-20261002-010203.tar.gz"
+        echo
+        read -r -p "迁移包路径: " backup_path
+        [ -f "$backup_path" ] || { echo "文件不存在：$backup_path"; pause; continue; }
+        echo
+        echo "恢复会覆盖当前 HomeSphere / QMediaSync 本地数据。"
+        read -r -p "输入 RESTORE 确认继续: " confirm
+        if [ "$confirm" = "RESTORE" ]; then
+          bash "$APP_DIR/scripts/restore.sh" "$backup_path"
+        else
+          echo "已取消。"
+        fi
+        pause
+        ;;
+      0) return ;;
+      *) ;;
+    esac
+  done
+}
+
 while true; do
   clear
   cat <<EOF
@@ -478,6 +534,7 @@ HomeSphere $(version)
 10. 系统资源
 11. 播放链路安全自检
 12. 115 / STRM
+13. 备份 / VPS 迁移
 0. 退出
 EOF
 
@@ -497,6 +554,7 @@ EOF
     10) show_resources; pause ;;
     11) playback_safety_check; pause ;;
     12) strm_menu ;;
+    13) migration_menu ;;
     0) exit 0 ;;
     *) ;;
   esac
