@@ -146,16 +146,29 @@ export default function WorkPage(){
     return()=>controller.abort();
   },[selected,playbackRevision]);
 
+  const orderedFiles=useMemo(()=>
+    [...(work?.files||[])].sort((a,b)=>
+      (a.season??1)-(b.season??1)||
+      (a.episode??Number.MAX_SAFE_INTEGER)-(b.episode??Number.MAX_SAFE_INTEGER)||
+      a.filename.localeCompare(b.filename)
+    ),[work]);
+
   const seasons=useMemo(()=>{
     const map=new Map<number,MediaItem[]>();
-    for(const file of work?.files||[]){
+    for(const file of orderedFiles){
       const season=file.season??1;
       const list=map.get(season)||[];
       list.push(file);
       map.set(season,list);
     }
     return map;
-  },[work]);
+  },[orderedFiles]);
+
+  const nextMedia=useMemo(()=>{
+    if(!selected||work?.mediaType!=='tv')return null;
+    const index=orderedFiles.findIndex(file=>file.id===selected.id);
+    return index>=0?orderedFiles[index+1]||null:null;
+  },[orderedFiles,selected,work?.mediaType]);
 
   const handleProgressSaved=useCallback((progress:PlaybackProgress)=>{
     setActivity(current=>({
