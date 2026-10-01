@@ -174,7 +174,7 @@ SELECT
 FROM watch_progress p
 JOIN works w ON w.id=p.work_id
 JOIN media m ON m.id=p.media_id
-WHERE p.profile_id=?
+WHERE p.profile_id=? AND COALESCE(w.hidden,0)=0
 ORDER BY p.last_played_at DESC
 LIMIT 120
 `).all(profileId) as unknown as ActivityRow[];
@@ -192,7 +192,7 @@ LIMIT 120
 SELECT w.id,w.title,w.year,w.media_type,w.poster_url
 FROM favorite_works f
 JOIN works w ON w.id=f.work_id
-WHERE f.profile_id=?
+WHERE f.profile_id=? AND COALESCE(w.hidden,0)=0
 ORDER BY f.created_at DESC
 LIMIT 20
 `).all(profileId) as unknown as FavoriteRow[];
