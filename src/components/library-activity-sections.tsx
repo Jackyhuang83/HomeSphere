@@ -67,7 +67,8 @@ export function LibraryActivitySections(){
     <div className="border-t border-line px-4 sm:px-5 py-5 space-y-7">
       {continueCount>0&&<ActivityRow title="继续播放" items={data.continueWatching} showProgress/>}
       {recentCount>0&&<ActivityRow title="最近观看" items={data.recentWatching}/>}
-      {favoriteCount>0&&<FavoriteRow items={data.favorites}/>}
+      {favoriteCount>0&&<WorkRow title="我的收藏" items={data.favorites}/>}
+      {watchlistCount>0&&<WorkRow title="想看" items={data.watchlist}/>}
     </div>
   </details>;
 }
