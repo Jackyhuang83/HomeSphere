@@ -126,7 +126,9 @@ ON CONFLICT(id) DO UPDATE SET
 }
 
 export function upsertMedia(item:MediaItem):void {
-  database().prepare(`
+  const conn=database();
+  const work=conn.prepare('SELECT media_type,year FROM works WHERE id=? AND provider=?').get(item.workId,SOURCE) as {media_type:string;year:string|null}|undefined;
+  conn.prepare(`
 INSERT INTO media (
   id,work_id,provider,remote_id,token,source_url,path,filename,title,year,media_type,season,episode,size,hash,updated_at
 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -146,7 +148,7 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at=excluded.updated_at
 `).run(
     item.id,item.workId,SOURCE,item.path,null,item.sourceUrl??null,item.path,item.filename,
-    item.title,item.year??null,item.mediaType,item.season??null,item.episode??null,
+    item.title,work?.year??item.year??null,work?.media_type??item.mediaType,item.season??null,item.episode??null,
     item.size??null,item.hash??null,item.updatedAt
   );
 }
