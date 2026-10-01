@@ -693,7 +693,7 @@ function HlsVideo({
 }
 
 function missingEpisodes(files:MediaItem[]):number[] {
-  const numbers=[...new Set(files.map(file=>file.episode).filter((value):value is number=>Number.isInteger(value)&&value>0))].sort((a,b)=>a-b);
+  const numbers=[...new Set(files.map(file=>file.episode).filter((value):value is number=>typeof value==='number'&&Number.isInteger(value)&&value>0))].sort((a,b)=>a-b);
   if(numbers.length<2)return [];
   const missing:number[]=[];
   for(let value=numbers[0];value<=numbers[numbers.length-1]&&missing.length<12;value++){
