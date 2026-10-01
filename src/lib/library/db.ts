@@ -281,7 +281,7 @@ SELECT w.id,w.manual_match,w.updated_at,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
 WHERE w.provider=? AND w.tmdb_id=? AND w.media_type=?
 GROUP BY w.id
-ORDER BY COALESCE(w.manual_match,0) DESC,COUNT(m.id) DESC,w.updated_at DESC
+ORDER BY COALESCE(w.hidden,0) ASC,COALESCE(w.manual_match,0) DESC,COUNT(m.id) DESC,w.updated_at DESC
 `).all(SOURCE,group.tmdb_id,group.media_type) as unknown as Array<{
       id:string;manual_match:number|null;updated_at:number;file_count:number;
     }>;
