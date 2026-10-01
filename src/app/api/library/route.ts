@@ -15,6 +15,7 @@ export async function GET(req:Request){
   const region=url.searchParams.get('region');
   const sort=url.searchParams.get('sort');
   const animation=url.searchParams.get('animation');
+  const hidden=url.searchParams.get('hidden');
   const result=listWorks({
     limit:Number(url.searchParams.get('limit')||60),
     offset:Number(url.searchParams.get('offset')||0),
@@ -23,6 +24,7 @@ export async function GET(req:Request){
     region:region==='mainland'||region==='hmt'||region==='overseas'?region:undefined,
     animation:animation==='1',
     sort:sort==='recent'?'recent':undefined,
+    hidden:hidden==='1',
   });
   return NextResponse.json({...result,libraryConfigured:isLibraryConfigured(),tmdbConfigured:tmdbConfigured()},{
     headers:{'Cache-Control':'private, no-store'}
