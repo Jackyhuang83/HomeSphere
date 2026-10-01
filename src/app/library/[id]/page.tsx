@@ -411,7 +411,7 @@ export default function WorkPage(){
 
         <aside className="card p-4">
           <div className="flex gap-3">
-            {poster&&<img src={poster} alt={work.title} className="w-24 aspect-[2/3] object-cover rounded-lg shrink-0"/>}
+            {poster&&<img src={poster} alt={work.title} decoding="async" className="w-24 aspect-[2/3] object-cover rounded-lg shrink-0"/>}
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold text-content">{work.title}</h1>
               <p className="text-sm text-muted mt-1">{[
