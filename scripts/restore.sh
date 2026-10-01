@@ -27,7 +27,17 @@ done < <(tar -tzf "$BACKUP")
 
 TMP_DIR="$(mktemp -d /root/.homesphere-restore.XXXXXX)"
 chmod 700 "$TMP_DIR"
-cleanup() { rm -rf "$TMP_DIR"; }
+RESTORE_STOPPED=0
+cleanup() {
+  local rc=$?
+  rm -rf "$TMP_DIR"
+  if [ "$rc" -ne 0 ] && [ "$RESTORE_STOPPED" -eq 1 ]; then
+    echo
+    echo "[警告] 恢复过程中断，核心容器保持停止，避免启动半恢复状态。"
+    echo "请保留恢复前快照并把当前输出发给我处理。"
+  fi
+  return "$rc"
+}
 trap cleanup EXIT
 
 tar -C "$TMP_DIR" -xzf "$BACKUP"
@@ -72,6 +82,7 @@ fi
 
 say "停止新 VPS 的 HomeSphere 服务"
 docker compose "${COMPOSE_FILES[@]}" stop homesphere media-bridge qms-postgres >/dev/null
+RESTORE_STOPPED=1
 
 restore_volume() {
   local volume="$1" image="$2" archive="$3"
@@ -101,6 +112,7 @@ fi
 
 say "启动恢复后的服务"
 docker compose "${COMPOSE_FILES[@]}" up -d
+RESTORE_STOPPED=0
 
 say "重新确认内部密钥与 STRM 定时索引"
 bash "$APP_DIR/scripts/ensure-qms-api-key.sh"
