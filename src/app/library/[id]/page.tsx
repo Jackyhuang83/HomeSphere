@@ -391,7 +391,7 @@ export default function WorkPage(){
                 initialPosition={selectedProgress?.completed?0:(selectedProgress?.position||0)}
                 onFatalError={handlePlaybackFatal}
                 onProgressSaved={handleProgressSaved}
-                onEnded={()=>{if(autoNext&&nextMedia)chooseMedia(nextMedia);}}
+                onPlaybackEnded={()=>{if(autoNext&&nextMedia)chooseMedia(nextMedia);}}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
@@ -495,12 +495,14 @@ function HlsVideo({
   initialPosition,
   onFatalError,
   onProgressSaved,
+  onPlaybackEnded,
 }:{
   src:string;
   mediaId:string;
   initialPosition:number;
   onFatalError:(message:string)=>void;
   onProgressSaved:(progress:PlaybackProgress)=>void;
+  onPlaybackEnded:()=>void;
 }){
   const videoRef=useRef<HTMLVideoElement|null>(null);
   const initialPositionRef=useRef(initialPosition);
@@ -518,8 +520,9 @@ function HlsVideo({
 
     const persistProgress=(force=false)=>{
       const position=video.currentTime;
-      const duration=video.duration;
-      if(!Number.isFinite(position)||!Number.isFinite(duration)||duration<=0||position<1)return;
+      const rawDuration=video.duration;
+      const duration=Number.isFinite(rawDuration)&&rawDuration>0?rawDuration:0;
+      if(!Number.isFinite(position)||position<1)return;
       const now=Date.now();
       if(!force&&now-lastSavedAt<20000)return;
       lastSavedAt=now;
@@ -539,17 +542,41 @@ function HlsVideo({
 
     const applyResume=()=>{
       if(resumeApplied)return;
-      resumeApplied=true;
       const position=initialPositionRef.current;
+      if(position<30){resumeApplied=true;return;}
       const duration=video.duration;
-      if(
-        Number.isFinite(duration)&&
-        position>=30&&
-        position<duration*0.92&&
-        position<duration-10
-      ){
-        try{video.currentTime=Math.min(position,duration-5);}catch{}
+      if(Number.isFinite(duration)&&duration>0){
+        if(position<duration*0.92&&position<duration-10){
+          try{video.currentTime=Math.min(position,duration-5);}catch{}
+        }
+        resumeApplied=true;
+        return;
       }
+      if(video.seekable.length>0){
+        const end=video.seekable.end(video.seekable.length-1);
+        if(Number.isFinite(end)&&position<end-5){
+          try{video.currentTime=position;resumeApplied=true;}catch{}
+        }
+      }
+    };
+
+    const applyPlayerPreferences=()=>{
+      try{
+        const raw=window.localStorage.getItem('homesphere.player.volume');
+        if(!raw)return;
+        const prefs=JSON.parse(raw) as {volume?:number;muted?:boolean};
+        if(Number.isFinite(prefs.volume))video.volume=Math.max(0,Math.min(1,Number(prefs.volume)));
+        if(typeof prefs.muted==='boolean')video.muted=prefs.muted;
+      }catch{}
+    };
+
+    const savePlayerPreferences=()=>{
+      try{
+        window.localStorage.setItem('homesphere.player.volume',JSON.stringify({
+          volume:video.volume,
+          muted:video.muted,
+        }));
+      }catch{}
     };
 
     const startDesktopPlayback=async()=>{
@@ -607,10 +634,14 @@ function HlsVideo({
 
     const onTimeUpdate=()=>persistProgress(false);
     const onPause=()=>persistProgress(true);
-    const onEnded=()=>persistProgress(true);
+    const onEnded=()=>{persistProgress(true);onPlaybackEnded();};
     const onPageHide=()=>persistProgress(true);
 
+    applyPlayerPreferences();
     video.addEventListener('loadedmetadata',applyResume);
+    video.addEventListener('durationchange',applyResume);
+    video.addEventListener('canplay',applyResume);
+    video.addEventListener('volumechange',savePlayerPreferences);
     video.addEventListener('timeupdate',onTimeUpdate);
     video.addEventListener('pause',onPause);
     video.addEventListener('ended',onEnded);
@@ -630,6 +661,9 @@ function HlsVideo({
       persistProgress(true);
       disposed=true;
       video.removeEventListener('loadedmetadata',applyResume);
+      video.removeEventListener('durationchange',applyResume);
+      video.removeEventListener('canplay',applyResume);
+      video.removeEventListener('volumechange',savePlayerPreferences);
       video.removeEventListener('timeupdate',onTimeUpdate);
       video.removeEventListener('pause',onPause);
       video.removeEventListener('ended',onEnded);
@@ -639,7 +673,7 @@ function HlsVideo({
       video.removeAttribute('src');
       video.load();
     };
-  },[src,mediaId,onFatalError,onProgressSaved]);
+  },[src,mediaId,onFatalError,onProgressSaved,onPlaybackEnded]);
 
   return <video
     ref={videoRef}
@@ -652,6 +686,16 @@ function HlsVideo({
       if(code)onFatalError(`浏览器播放失败（MediaError ${code}）`);
     }}
   />;
+}
+
+function missingEpisodes(files:MediaItem[]):number[] {
+  const numbers=[...new Set(files.map(file=>file.episode).filter((value):value is number=>Number.isInteger(value)&&value>0))].sort((a,b)=>a-b);
+  if(numbers.length<2)return [];
+  const missing:number[]=[];
+  for(let value=numbers[0];value<=numbers[numbers.length-1]&&missing.length<12;value++){
+    if(!numbers.includes(value))missing.push(value);
+  }
+  return missing;
 }
 
 function Centered({text}:{text:string}){
