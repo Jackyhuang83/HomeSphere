@@ -345,6 +345,7 @@ export default function WorkPage(){
       <div className="flex items-center gap-3">
         <Link href="/library" className="text-sm text-muted hover:text-content">← 返回片库</Link>
         <div className="ml-auto flex items-center gap-3">
+          <button type="button" className="text-sm text-muted hover:text-content" onClick={()=>setEditOpen(value=>!value)}>编辑信息</button>
           <Link href={`/library/${work.id}/match`} className="text-sm text-muted hover:text-content">修正TMDB</Link>
           <button
             type="button"
@@ -357,22 +358,50 @@ export default function WorkPage(){
         </div>
       </div>
 
+      {editOpen&&<section className="mt-4 rounded-xl border border-line bg-card p-4">
+        <h2 className="text-sm font-semibold text-content">编辑作品信息</h2>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_120px_130px] gap-2">
+          <input className="input h-10" value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="片名"/>
+          <input className="input h-10" value={editYear} onChange={e=>setEditYear(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="年份"/>
+          <select className="input h-10" value={editType} onChange={e=>setEditType(e.target.value as 'movie'|'tv')}>
+            <option value="movie">电影</option>
+            <option value="tv">剧集</option>
+          </select>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <button className="btn-primary h-9" disabled={editSaving||!editTitle.trim()} onClick={()=>void saveWorkEdit()}>{editSaving?'保存中…':'保存'}</button>
+          <button className="btn-ghost h-9" disabled={editSaving} onClick={()=>setEditOpen(false)}>取消</button>
+          {editType!==work.mediaType&&<span className="text-xs text-warning">切换电影/剧集类型会清除原 TMDB 匹配，请保存后重新匹配。</span>}
+        </div>
+      </section>}
+
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
         <div>
           <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
             {!selected?<span className="text-white/50 text-sm">没有可播放文件</span>
               :playbackLoading?<span className="text-white/50 text-sm">正在获取播放地址…</span>
-              :playbackError?<span className="text-red-300 text-sm px-4 text-center">{playbackError}</span>
+              :playbackError?<div className="px-4 text-center">
+                <div className="text-red-300 text-sm">{playbackError}</div>
+                <button className="mt-3 rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10" onClick={()=>{fatalRetriedRef.current='';setPlaybackError('');setPlaybackRevision(value=>value+1);}}>重新解析</button>
+              </div>
               :playbackUrl?<HlsVideo
                 key={`${selected.id}:${playbackUrl}`}
                 src={playbackUrl}
                 mediaId={selected.id}
                 initialPosition={selectedProgress?.completed?0:(selectedProgress?.position||0)}
-                onFatalError={setPlaybackError}
+                onFatalError={handlePlaybackFatal}
                 onProgressSaved={handleProgressSaved}
+                onEnded={()=>{if(autoNext&&nextMedia)chooseMedia(nextMedia);}}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
+          {work.mediaType==='tv'&&<div className="mt-2 flex flex-wrap items-center gap-2">
+            {nextMedia&&<button className="btn-ghost h-8 text-xs" onClick={()=>chooseMedia(nextMedia)}>下一集 · {nextMedia.episode??'?'}</button>}
+            <label className="inline-flex items-center gap-2 text-xs text-muted select-none">
+              <input type="checkbox" checked={autoNext} onChange={e=>setAutoNextPreference(e.target.checked)}/>
+              播放结束自动下一集
+            </label>
+          </div>}
           <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone/iPad 使用原生 HLS；Windows 强制通过本机播放助手 + hls.js 连接 115。视频字节不经过 VPS。</p>
         </div>
 
@@ -389,13 +418,22 @@ export default function WorkPage(){
                 selectedProgress?.completed?'已看完':undefined,
                 work.hidden?'已隐藏':undefined,
               ].filter(Boolean).join(' · ')}</p>
-              <button
-                className={`mt-3 h-9 rounded-lg px-3 text-sm border transition-colors ${activity.favorite?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
-                onClick={()=>void toggleFavorite()}
-                disabled={favoriteSaving}
-              >
-                {activity.favorite?'★ 已收藏':'☆ 收藏'}
-              </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className={`h-9 rounded-lg px-3 text-sm border transition-colors ${activity.favorite?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
+                  onClick={()=>void toggleFavorite()}
+                  disabled={favoriteSaving}
+                >
+                  {activity.favorite?'★ 已收藏':'☆ 收藏'}
+                </button>
+                <button
+                  className={`h-9 rounded-lg px-3 text-sm border transition-colors ${activity.watchlist?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
+                  onClick={()=>void toggleWatchlist()}
+                  disabled={watchlistSaving}
+                >
+                  {activity.watchlist?'✓ 想看':'＋ 想看'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -404,8 +442,23 @@ export default function WorkPage(){
           {selected&&<div className="mt-4">
             <div className="text-xs text-faint mb-1">当前条目</div>
             <div className="text-sm text-content break-all">{selected.filename}</div>
+            {work.mediaType==='tv'&&<button className="mt-2 text-xs text-muted hover:text-content" onClick={openEpisodeEdit}>修正当前季 / 集</button>}
+            {episodeEditOpen&&work.mediaType==='tv'&&<div className="mt-3 rounded-lg border border-line p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-faint">季
+                  <input className="input h-9 mt-1 w-full" inputMode="numeric" value={episodeSeason} onChange={e=>setEpisodeSeason(e.target.value.replace(/\D/g,'').slice(0,2))}/>
+                </label>
+                <label className="text-xs text-faint">集
+                  <input className="input h-9 mt-1 w-full" inputMode="numeric" value={episodeNumber} onChange={e=>setEpisodeNumber(e.target.value.replace(/\D/g,'').slice(0,4))}/>
+                </label>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button className="btn-primary h-8 text-xs" disabled={episodeSaving||!episodeNumber} onClick={()=>void saveEpisodeEdit()}>{episodeSaving?'保存中…':'保存季集'}</button>
+                <button className="btn-ghost h-8 text-xs" disabled={episodeSaving} onClick={()=>setEpisodeEditOpen(false)}>取消</button>
+              </div>
+            </div>}
             {selectedProgress&&<div className="mt-2 text-xs text-muted">
-              {selectedProgress.completed?'已看完':`已观看 ${selectedPercent}% · 下次从这里继续`}
+              {selectedProgress.completed?'已看完':selectedProgress.duration>0?`已观看 ${selectedPercent}% · 下次从这里继续`:'已记录观看进度'}
             </div>}
           </div>}
         </aside>
@@ -413,7 +466,10 @@ export default function WorkPage(){
 
       {work.mediaType==='tv'&&work.files.length>0&&<section className="mt-6 space-y-5">
         {[...seasons.entries()].map(([season,files])=><div key={season}>
-          <h2 className="text-sm font-semibold text-content mb-2">第 {season} 季</h2>
+          <div className="flex flex-wrap items-baseline gap-2 mb-2">
+            <h2 className="text-sm font-semibold text-content">第 {season} 季</h2>
+            {missingEpisodes(files).length>0&&<span className="text-xs text-warning">编号缺口：{missingEpisodes(files).join('、')}</span>}
+          </div>
           <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
             {files.map((file,index)=>{
               const completed=activity.mediaProgress[file.id]?.completed;
