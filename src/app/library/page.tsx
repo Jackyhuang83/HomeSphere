@@ -34,12 +34,14 @@ export default function LibraryPage(){
   const [bridgeHealth,setBridgeHealth]=useState<BridgeHealthView|null>(null);
   const [probing,setProbing]=useState(false);
   const [message,setMessage]=useState('');
+  const [showHidden,setShowHidden]=useState(false);
 
   const load=useCallback(async()=>{
     setLoading(true);
     try{
       const currentYear=new Date().getFullYear();
       const params=new URLSearchParams({limit:'120'});
+      if(showHidden)params.set('hidden','1');
       if(filter==='movie'||filter==='tv')params.set('type',filter);
       else if(filter==='animation')params.set('animation','1');
       if(category==='recent')params.set('sort','recent');
@@ -49,7 +51,7 @@ export default function LibraryPage(){
         params.set('year',String(currentYear-offset));
       }
       const url=activeQuery
-        ? `/api/library/search?q=${encodeURIComponent(activeQuery)}`
+        ? `/api/library/search?q=${encodeURIComponent(activeQuery)}${showHidden?'&hidden=1':''}`
         : `/api/library?${params.toString()}`;
       const res=await fetch(url,{cache:'no-store'});
       const data=await res.json();
@@ -62,7 +64,7 @@ export default function LibraryPage(){
       }
     }catch(error){setMessage(error instanceof Error?error.message:'片库读取失败');}
     finally{setLoading(false);}
-  },[activeQuery,filter,category]);
+  },[activeQuery,filter,category,showHidden]);
 
   const loadBridgeHealth=useCallback(async()=>{
     try{
@@ -84,7 +86,8 @@ export default function LibraryPage(){
       if(!res.ok)throw new Error(data.error||'同步失败');
       const s=data.summary||{};
       const invalid=s.invalidFiles?`，忽略 ${s.invalidFiles} 个无效 STRM`:'';
-      setMessage(`同步完成：${s.worksIndexed??0} 部作品，${s.strmFilesIndexed??0} 个 STRM，扫描 ${s.directoriesScanned??0} 个目录${invalid}`);
+      const cleanup=(s.removedMedia||s.removedWorks)?`，清理失效 STRM ${s.removedMedia??0} 个、空作品 ${s.removedWorks??0} 部`:'';
+      setMessage(`同步完成：${s.worksIndexed??0} 部作品，${s.strmFilesIndexed??0} 个 STRM，扫描 ${s.directoriesScanned??0} 个目录${invalid}${cleanup}`);
       setActiveQuery('');setQuery('');
       await Promise.all([load(),loadBridgeHealth()]);
     }catch(error){setMessage(error instanceof Error?error.message:'同步失败');}
@@ -127,7 +130,7 @@ export default function LibraryPage(){
         <div className="flex items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-content tracking-tight">我的片库</h1>
-            <p className="text-sm text-muted mt-1">{activeQuery?`搜索结果 · ${items.length} 部`:`共 ${total} 部作品`}</p>
+            <p className="text-sm text-muted mt-1">{showHidden?`已隐藏 · ${activeQuery?items.length:total} 部`:activeQuery?`搜索结果 · ${items.length} 部`:`共 ${total} 部作品`}</p>
           </div>
         </div>
       </div>
@@ -140,7 +143,7 @@ export default function LibraryPage(){
 
       <div className="mb-5 sm:mb-6 rounded-2xl border border-line/80 bg-surface/80 p-3 sm:p-4">
         <form className="flex gap-2" onSubmit={e=>{e.preventDefault();setActiveQuery(query.trim());}}>
-          <input className="input flex-1 h-10 rounded-xl" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索电影、剧集…"/>
+          <input className="input flex-1 h-10 rounded-xl" value={query} onChange={e=>setQuery(e.target.value)} placeholder={showHidden?"搜索已隐藏内容…":"搜索电影、剧集…"}/>
           <button className="btn-primary h-10 rounded-xl px-4" type="submit">搜索</button>
           {activeQuery&&<button className="btn-ghost h-10 rounded-xl" type="button" onClick={()=>{setQuery('');setActiveQuery('');}}>清除</button>}
         </form>
@@ -187,14 +190,27 @@ export default function LibraryPage(){
           片库管理
         </summary>
         <div className="border-t border-line px-4 py-4">
-          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <button className="btn-ghost h-10 sm:w-auto" onClick={()=>void sync()} disabled={syncing||!libraryConfigured}>
               {syncing?'同步中…':'同步 STRM'}
             </button>
             <button className="btn-primary h-10 sm:w-auto" onClick={()=>void scrape()} disabled={scraping||!tmdbReady}>
               {scraping?'整理中…':'整理海报'}
             </button>
+            <button
+              className="btn-ghost h-10 sm:w-auto"
+              onClick={()=>{
+                setShowHidden(value=>!value);
+                setActiveQuery('');
+                setQuery('');
+              }}
+            >
+              {showHidden?'返回正常片库':'查看已隐藏'}
+            </button>
           </div>
+          <p className="text-xs text-faint mb-4">
+            新增内容通过 STRM 同步进入片库；同步会自动清理已经消失的 STRM。隐藏只影响 HomeSphere 展示，不会删除 115 文件。
+          </p>
           {bridgeHealth&&<BridgeStatusCard health={bridgeHealth} probing={probing} onProbe={probeBridge}/>}
         </div>
       </details>
@@ -238,7 +254,8 @@ function Notice({children}:{children:React.ReactNode}){
 }
 function WorkCard({item}:{item:LibraryWork}){
   const poster=item.posterUrl?`/api/image/${encodeURIComponent(item.posterUrl)}`:undefined;
-  const statusLabel=item.scrapeStatus==='pending'?'待整理'
+  const statusLabel=item.hidden?'已隐藏'
+    :item.scrapeStatus==='pending'?'待整理'
     :item.scrapeStatus==='review'?'待确认'
     :item.scrapeStatus==='failed'?'待修正'
     :'';
