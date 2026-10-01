@@ -316,7 +316,8 @@ export function setWorkMatch(id:string,patch:{
   posterUrl?:string; backdropUrl?:string; overview?:string; region?:MediaRegion; isAnimation?:boolean; scrapeStatus:ScrapeStatus;
   matchConfidence?:'high'|'medium'|'low'; scrapeError?:string; manualMatch?:boolean;
 }):void {
-  database().prepare(`
+  const conn=database();
+  conn.prepare(`
 UPDATE works SET title=?,original_title=?,year=?,media_type=?,tmdb_id=?,poster_url=?,backdrop_url=?,overview=?,region=?,is_animation=?,
 scrape_status=?,scrape_error=?,match_confidence=?,manual_match=?,updated_at=?
 WHERE id=? AND provider=?
@@ -326,6 +327,8 @@ WHERE id=? AND provider=?
     patch.isAnimation===undefined?null:(patch.isAnimation?1:0),patch.scrapeStatus,
     patch.scrapeError??null,patch.matchConfidence??null,patch.manualMatch?1:0,Date.now(),id,SOURCE
   );
+  conn.prepare('UPDATE media SET media_type=?,year=COALESCE(?,year),updated_at=? WHERE work_id=? AND provider=?')
+    .run(patch.mediaType,patch.year??null,Date.now(),id,SOURCE);
 }
 
 export function listWorksMissingMetadata(limit=100):LibraryWork[] {
@@ -415,7 +418,7 @@ UPDATE works SET title=?,year=?,scrape_status='manual',scrape_error=NULL,manual_
 WHERE id=? AND provider=?
 `).run(title,year,Date.now(),id,SOURCE);
   }
-  conn.prepare('UPDATE media SET media_type=?,year=COALESCE(?,year),updated_at=? WHERE work_id=? AND provider=?')
+  conn.prepare('UPDATE media SET media_type=?,year=?,updated_at=? WHERE work_id=? AND provider=?')
     .run(patch.mediaType,year,Date.now(),id,SOURCE);
   return getWork(id);
 }
