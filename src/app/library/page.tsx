@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Header } from '@/components/header';
 import { SiteFooter } from '@/components/site-footer';
+import { LibraryActivitySections } from '@/components/library-activity-sections';
 import type { LibraryWork } from '@/lib/library/types';
 
 type Filter='all'|'movie'|'tv'|'animation';
@@ -134,6 +135,8 @@ export default function LibraryPage(){
       {!libraryConfigured&&<Notice>尚未挂载 STRM 目录。请把 Media Bridge 生成的 STRM 只读挂载到 <code>/media</code>。</Notice>}
       {!tmdbReady&&<Notice>尚未配置 <code>TMDB_API_TOKEN</code>；片库仍可使用，但不会自动补海报和简介。</Notice>}
       {message&&<div className="mb-4 rounded-xl border border-line bg-surface-raised px-4 py-3 text-sm text-content">{message}</div>}
+
+      <LibraryActivitySections />
 
       <div className="mb-5 sm:mb-6 rounded-2xl border border-line/80 bg-surface/80 p-3 sm:p-4">
         <form className="flex gap-2" onSubmit={e=>{e.preventDefault();setActiveQuery(query.trim());}}>
