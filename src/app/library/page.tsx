@@ -7,7 +7,7 @@ import { SiteFooter } from '@/components/site-footer';
 import type { LibraryWork } from '@/lib/library/types';
 
 type Filter='all'|'movie'|'tv'|'animation';
-type CategoryFilter='all'|'recent'|'year-0'|'year-1'|'year-2'|'mainland'|'hmt'|'overseas';
+type CategoryFilter='all'|'recent'|'year-0'|'year-1'|'year-2'|'year-3'|'mainland'|'hmt'|'overseas';
 
 interface BridgeHealthView {
   ready:boolean;
@@ -162,6 +162,7 @@ export default function LibraryPage(){
               ['year-0',String(new Date().getFullYear())],
               ['year-1',String(new Date().getFullYear()-1)],
               ['year-2',String(new Date().getFullYear()-2)],
+              ['year-3',String(new Date().getFullYear()-3)],
               ['mainland','中国内地'],
               ['hmt','港澳台'],
               ['overseas','海外'],
