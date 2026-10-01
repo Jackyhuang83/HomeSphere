@@ -44,40 +44,46 @@ export function LibraryActivitySections(){
   },[]);
 
   if(!data)return null;
-  if(!data.continueWatching.length&&!data.recentWatching.length&&!data.favorites.length)return null;
 
-  return <div className="space-y-8 mb-10">
-    {data.continueWatching.length>0&&<ActivityRow
-      title="继续播放"
-      items={data.continueWatching}
-      showProgress
-    />}
-    {data.recentWatching.length>0&&<ActivityRow
-      title="最近观看"
-      items={data.recentWatching}
-    />}
-    {data.favorites.length>0&&<FavoriteRow items={data.favorites}/>}
-  </div>;
+  const continueCount=data.continueWatching.length;
+  const recentCount=data.recentWatching.length;
+  const favoriteCount=data.favorites.length;
+  if(!continueCount&&!recentCount&&!favoriteCount)return null;
+
+  return <details className="mb-5 sm:mb-6 rounded-2xl border border-line/80 bg-card overflow-hidden">
+    <summary className="cursor-pointer select-none px-4 py-3.5 sm:px-5 flex items-center gap-3 text-sm hover:bg-hover/60 transition-colors">
+      <span className="font-semibold text-content">观看记录与收藏</span>
+      <span className="ml-auto text-xs text-muted">
+        {[
+          continueCount?'继续 '+continueCount:'',
+          recentCount?'最近 '+recentCount:'',
+          favoriteCount?'收藏 '+favoriteCount:'',
+        ].filter(Boolean).join(' · ')}
+      </span>
+    </summary>
+    <div className="border-t border-line px-4 sm:px-5 py-5 space-y-7">
+      {continueCount>0&&<ActivityRow title="继续播放" items={data.continueWatching} showProgress/>}
+      {recentCount>0&&<ActivityRow title="最近观看" items={data.recentWatching}/>}
+      {favoriteCount>0&&<FavoriteRow items={data.favorites}/>}
+    </div>
+  </details>;
 }
 
 function ActivityRow({title,items,showProgress=false}:{title:string;items:ActivityItem[];showProgress?:boolean}){
   return <section>
-    <div className="flex items-end justify-between gap-3 mb-3">
-      <h2 className="text-lg sm:text-xl font-semibold text-content">{title}</h2>
-      <Link href="/library" className="text-xs sm:text-sm text-muted hover:text-content">进入片库</Link>
-    </div>
+    <h2 className="text-base sm:text-lg font-semibold text-content mb-3">{title}</h2>
     <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-thin">
       {items.map(item=>{
         const percent=item.duration>0?Math.max(0,Math.min(100,Math.round(item.position/item.duration*100))):0;
         const href=`/library/${item.work.id}?media=${encodeURIComponent(item.media.id)}`;
-        return <Link key={item.work.id} href={href} className="group w-[132px] sm:w-[156px] shrink-0">
+        return <Link key={item.work.id} href={href} className="group w-[112px] sm:w-[132px] shrink-0">
           <Poster work={item.work}/>
           {showProgress&&<div className="h-1 rounded-full bg-chip mt-2 overflow-hidden">
             <div className="h-full bg-accent" style={{width:`${percent}%`}}/>
           </div>}
           <div className={showProgress?'pt-1.5':'pt-2'}>
-            <div className="text-sm font-medium text-content line-clamp-1 group-hover:text-accent">{item.work.title}</div>
-            <div className="text-xs text-faint mt-0.5 line-clamp-1">
+            <div className="text-[13px] sm:text-sm font-medium text-content line-clamp-1 group-hover:text-accent">{item.work.title}</div>
+            <div className="text-[11px] sm:text-xs text-faint mt-0.5 line-clamp-1">
               {activityMeta(item,showProgress?percent:undefined)}
             </div>
           </div>
@@ -89,16 +95,13 @@ function ActivityRow({title,items,showProgress=false}:{title:string;items:Activi
 
 function FavoriteRow({items}:{items:ActivityWork[]}){
   return <section>
-    <div className="flex items-end justify-between gap-3 mb-3">
-      <h2 className="text-lg sm:text-xl font-semibold text-content">我的收藏</h2>
-      <Link href="/library" className="text-xs sm:text-sm text-muted hover:text-content">进入片库</Link>
-    </div>
+    <h2 className="text-base sm:text-lg font-semibold text-content mb-3">我的收藏</h2>
     <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-thin">
-      {items.map(work=><Link key={work.id} href={`/library/${work.id}`} className="group w-[132px] sm:w-[156px] shrink-0">
+      {items.map(work=><Link key={work.id} href={`/library/${work.id}`} className="group w-[112px] sm:w-[132px] shrink-0">
         <Poster work={work}/>
         <div className="pt-2">
-          <div className="text-sm font-medium text-content line-clamp-1 group-hover:text-accent">{work.title}</div>
-          <div className="text-xs text-faint mt-0.5">{[work.year,work.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}</div>
+          <div className="text-[13px] sm:text-sm font-medium text-content line-clamp-1 group-hover:text-accent">{work.title}</div>
+          <div className="text-[11px] sm:text-xs text-faint mt-0.5">{[work.year,work.mediaType==='movie'?'电影':'剧集'].filter(Boolean).join(' · ')}</div>
         </div>
       </Link>)}
     </div>
