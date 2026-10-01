@@ -301,6 +301,7 @@ function WorkCard({item}:{item:LibraryWork}){
           alt={item.title}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
           loading="lazy"
+          decoding="async"
         />
         :<div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card via-chip to-hover">
           <span className="line-clamp-3">{item.title}</span>
