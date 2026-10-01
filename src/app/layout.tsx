@@ -12,12 +12,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, noarchive: true, nosnippet: true },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: '48x48' },
-      { url: '/icons/icon-96.png', sizes: '96x96', type: 'image/png' },
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/icons/homesphere.svg?v=2', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png?v=2', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png?v=2', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    shortcut: ['/icons/homesphere.svg?v=2'],
+    apple: [{ url: '/icons/apple-touch-icon.png?v=2', sizes: '180x180', type: 'image/png' }],
   },
 };
 
