@@ -19,7 +19,7 @@ export function Header() {
       <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="HomeSphere 首页">
-            <img src="/icons/icon-512.png" alt="HomeSphere" className="w-7 h-7 rounded-lg" />
+            <img src="/icons/homesphere.svg?v=2" alt="HomeSphere" className="w-7 h-7 rounded-lg" />
             <span className="hidden sm:inline text-sm font-semibold text-content">HomeSphere</span>
           </Link>
           <nav className="flex items-center gap-1 ml-auto">
