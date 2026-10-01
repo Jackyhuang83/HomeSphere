@@ -65,8 +65,6 @@ export async function GET(req: Request, ctx: { params: Promise<{ url: string }> 
     if (etag) out.set('ETag', etag);
     const lastModified=res.headers.get('last-modified');
     if(lastModified)out.set('Last-Modified',lastModified);
-    const contentLength=res.headers.get('content-length');
-    if(contentLength)out.set('Content-Length',contentLength);
     out.set('Cache-Control', 'private, max-age=604800, stale-while-revalidate=86400');
     out.set('X-Content-Type-Options','nosniff');
 
