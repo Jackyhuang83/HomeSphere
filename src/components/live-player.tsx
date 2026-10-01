@@ -53,8 +53,6 @@ export function LivePlayer({ url, fallbackUrls = [], title, onPrevChannel, onNex
   const [loading, setLoading] = useState(true);
   // 手动重试计数：变化时重建整个播放器实例（比 location.reload() 轻得多）
   const [retryNonce, setRetryNonce] = useState(0);
-  // 起播前的品牌占位图（与点播 player-shell 共用 /player-poster.png），实际开始播放后隐藏
-  const [showPoster, setShowPoster] = useState(true);
   // 换台 OSD：切台后短暂显示频道名（键盘换台/控制条换台时的视觉反馈，全屏内同样可见）
   const [osdTitle, setOsdTitle] = useState('');
   const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,7 +99,6 @@ export function LivePlayer({ url, fallbackUrls = [], title, onPrevChannel, onNex
     if (!containerRef.current || !activeUrl) return;
     setError('');
     setLoading(true);
-    setShowPoster(true);
 
     let playbackStarted = false;
     let disposed = false;
@@ -351,7 +348,6 @@ export function LivePlayer({ url, fallbackUrls = [], title, onPrevChannel, onNex
     art.on('video:playing', () => {
       playbackStarted = true;
       setLoading(false);
-      setShowPoster(false);
       setError('');
     });
     art.on('video:error', () => {
@@ -388,18 +384,6 @@ export function LivePlayer({ url, fallbackUrls = [], title, onPrevChannel, onNex
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
-      {/* 起播前的品牌占位图 */}
-      {showPoster && !error && (
-        <div
-          className="absolute inset-0 bg-black pointer-events-none"
-          style={{
-            backgroundImage: 'url(/player-poster.png)',
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-          }}
-        />
-      )}
       {/* LIVE 呼吸标识 */}
       {!error && (
         <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-full pointer-events-none">
