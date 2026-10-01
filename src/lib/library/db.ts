@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS watchlist_works (
   PRIMARY KEY(profile_id,work_id),
   FOREIGN KEY(work_id) REFERENCES works(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_watch_progress_profile_work ON watch_progress(profile_id,work_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_works_profile_time ON favorite_works(profile_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_watchlist_works_profile_time ON watchlist_works(profile_id,created_at DESC);
 `);
 
   // HomeSphere is STRM-only. Purge rows created by removed legacy providers.
