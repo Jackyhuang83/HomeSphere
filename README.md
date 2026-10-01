@@ -67,9 +67,9 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - 家庭密码登录与 30 天 HttpOnly Session
 - iPhone / iPad / 桌面响应式 WebUI
 - Windows Chrome / Edge 通过本机 Player Helper 播放 115 STRM
-- 跨设备继续播放：播放进度保存在 HomeSphere SQLite
+- 跨设备继续播放：播放进度保存在 HomeSphere SQLite，并在“我的片库”折叠区统一展示
 - 最近观看与已看状态：电影/剧集可恢复进度，剧集显示已看集数状态
-- 我的收藏：在作品详情页收藏，并在首页快速进入
+- 我的收藏：在作品详情页收藏，并在“我的片库”折叠区快速进入
 - STRM 只读扫描
 - SQLite 本地片库索引
 - 电影 / 剧集作品级归组
