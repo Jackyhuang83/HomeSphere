@@ -34,6 +34,7 @@ export interface ActivityItem extends PlaybackProgress {
 
 export interface WorkActivityState {
   favorite:boolean;
+  watchlist:boolean;
   mediaProgress:Record<string,PlaybackProgress>;
 }
 
@@ -41,6 +42,7 @@ export interface LibraryActivitySummary {
   continueWatching:ActivityItem[];
   recentWatching:ActivityItem[];
   favorites:ActivityWork[];
+  watchlist:ActivityWork[];
 }
 
 let activitySchemaReady=false;
@@ -75,6 +77,16 @@ CREATE TABLE IF NOT EXISTS favorite_works (
 );
 CREATE INDEX IF NOT EXISTS idx_favorite_works_profile_time
   ON favorite_works(profile_id,created_at DESC);
+
+CREATE TABLE IF NOT EXISTS watchlist_works (
+  profile_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id,work_id),
+  FOREIGN KEY(work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_works_profile_time
+  ON watchlist_works(profile_id,created_at DESC);
 `);
   activitySchemaReady=true;
   return conn;
@@ -90,8 +102,8 @@ export function savePlaybackProgress(
   if(!media)return null;
 
   const duration=boundedNumber(durationInput,0,7*24*60*60);
-  if(duration<=0)return null;
-  const position=boundedNumber(positionInput,0,duration);
+  const position=boundedNumber(positionInput,0,duration>0?duration:7*24*60*60);
+  if(position<=0)return null;
   const completed=duration>=60 && position/duration>=COMPLETE_RATIO;
   const lastPlayedAt=Date.now();
 
@@ -140,6 +152,27 @@ ON CONFLICT(profile_id,work_id) DO UPDATE SET created_at=excluded.created_at
   return true;
 }
 
+export function setWorkWatchlist(
+  workId:string,
+  watchlist:boolean,
+  profileId=DEFAULT_PROFILE_ID
+):boolean {
+  const conn=activityDatabase();
+  const exists=conn.prepare('SELECT 1 ok FROM works WHERE id=?').get(workId) as {ok:number}|undefined;
+  if(!exists)return false;
+
+  if(watchlist){
+    conn.prepare(`
+INSERT INTO watchlist_works (profile_id,work_id,created_at)
+VALUES (?,?,?)
+ON CONFLICT(profile_id,work_id) DO UPDATE SET created_at=excluded.created_at
+`).run(profileId,workId,Date.now());
+  }else{
+    conn.prepare('DELETE FROM watchlist_works WHERE profile_id=? AND work_id=?').run(profileId,workId);
+  }
+  return true;
+}
+
 export function getWorkActivityState(
   workId:string,
   profileId=DEFAULT_PROFILE_ID
@@ -147,6 +180,9 @@ export function getWorkActivityState(
   const conn=activityDatabase();
   const favorite=Boolean(conn.prepare(
     'SELECT 1 ok FROM favorite_works WHERE profile_id=? AND work_id=?'
+  ).get(profileId,workId));
+  const watchlist=Boolean(conn.prepare(
+    'SELECT 1 ok FROM watchlist_works WHERE profile_id=? AND work_id=?'
   ).get(profileId,workId));
 
   const rows=conn.prepare(`
@@ -159,7 +195,7 @@ WHERE profile_id=? AND work_id=?
   for(const row of rows){
     mediaProgress[row.media_id]=mapProgress(row);
   }
-  return {favorite,mediaProgress};
+  return {favorite,watchlist,mediaProgress};
 }
 
 export function getLibraryActivitySummary(
@@ -183,8 +219,7 @@ LIMIT 120
   const continueWatching=dedupeWorks(activity.filter(item=>
     !item.completed &&
     item.position>=CONTINUE_MIN_SECONDS &&
-    item.duration>0 &&
-    item.position/item.duration<COMPLETE_RATIO
+    (item.duration<=0 || item.position/item.duration<COMPLETE_RATIO)
   ),12);
   const recentWatching=dedupeWorks(activity,20);
 
@@ -197,16 +232,28 @@ ORDER BY f.created_at DESC
 LIMIT 20
 `).all(profileId) as unknown as FavoriteRow[];
 
+  const watchlistRows=conn.prepare(`
+SELECT w.id,w.title,w.year,w.media_type,w.poster_url
+FROM watchlist_works q
+JOIN works w ON w.id=q.work_id
+WHERE q.profile_id=? AND COALESCE(w.hidden,0)=0
+ORDER BY q.created_at DESC
+LIMIT 20
+`).all(profileId) as unknown as FavoriteRow[];
+
+  const mapWork=(row:FavoriteRow):ActivityWork=>({
+    id:row.id,
+    title:row.title,
+    year:row.year??undefined,
+    mediaType:row.media_type==='tv'?'tv':'movie',
+    posterUrl:row.poster_url??undefined,
+  });
+
   return {
     continueWatching,
     recentWatching,
-    favorites:favoriteRows.map(row=>({
-      id:row.id,
-      title:row.title,
-      year:row.year??undefined,
-      mediaType:row.media_type==='tv'?'tv':'movie',
-      posterUrl:row.poster_url??undefined,
-    })),
+    favorites:favoriteRows.map(mapWork),
+    watchlist:watchlistRows.map(mapWork),
   };
 }
 
