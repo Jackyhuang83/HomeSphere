@@ -303,6 +303,10 @@ export default function WorkPage(){
     setPlaybackError(message);
   },[selected]);
 
+  const handlePlaybackEnded=useCallback(()=>{
+    if(autoNext&&nextMedia)chooseMedia(nextMedia);
+  },[autoNext,nextMedia]);
+
   const toggleHidden=async()=>{
     if(!work||visibilitySaving)return;
     const next=!Boolean(work.hidden);
@@ -391,7 +395,7 @@ export default function WorkPage(){
                 initialPosition={selectedProgress?.completed?0:(selectedProgress?.position||0)}
                 onFatalError={handlePlaybackFatal}
                 onProgressSaved={handleProgressSaved}
-                onPlaybackEnded={()=>{if(autoNext&&nextMedia)chooseMedia(nextMedia);}}
+                onPlaybackEnded={handlePlaybackEnded}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
