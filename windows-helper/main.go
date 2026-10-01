@@ -33,9 +33,11 @@ var (
 			if len(via) >= 5 {
 				return errors.New("too many redirects")
 			}
-			if !allowedUpstream(req.URL) {
+			normalized, err := normalizeUpstream(req.URL)
+			if err != nil {
 				return errors.New("redirect outside allowed 115 hosts")
 			}
+			req.URL = normalized
 			return nil
 		},
 	}
@@ -143,7 +145,8 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid url", http.StatusBadRequest)
 		return
 	}
-	if !allowedUpstream(target) {
+	target, err = normalizeUpstream(target)
+	if err != nil {
 		http.Error(w, "upstream host not allowed", http.StatusForbidden)
 		return
 	}
@@ -219,17 +222,35 @@ func decodeTarget(value string) (*url.URL, error) {
 	return u, nil
 }
 
-func allowedUpstream(u *url.URL) bool {
-	if u == nil || u.Scheme != "https" || u.User != nil {
-		return false
-	}
-	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+func allowed115Host(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	for _, domain := range []string{"115.com", "115cdn.net", "115vod.com"} {
 		if host == domain || strings.HasSuffix(host, "."+domain) {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizeUpstream(u *url.URL) (*url.URL, error) {
+	if u == nil || u.User != nil || !allowed115Host(u.Hostname()) {
+		return nil, errors.New("upstream host not allowed")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, errors.New("upstream scheme not allowed")
+	}
+	normalized := *u
+	// 115 occasionally returns an http:// HLS URL even though the same endpoint
+	// is available over TLS. Upgrade it locally rather than allowing plaintext
+	// upstream traffic from the helper.
+	if normalized.Scheme == "http" {
+		normalized.Scheme = "https"
+	}
+	return &normalized, nil
+}
+
+func allowedUpstream(u *url.URL) bool {
+	return u != nil && u.Scheme == "https" && u.User == nil && allowed115Host(u.Hostname())
 }
 
 func rewritePlaylist(text string, base *url.URL) (string, error) {
@@ -251,7 +272,11 @@ func rewritePlaylist(text string, base *url.URL) (string, error) {
 					return match
 				}
 				absolute, err := base.Parse(parts[1])
-				if err != nil || !allowedUpstream(absolute) {
+				if err != nil {
+					return match
+				}
+				absolute, err = normalizeUpstream(absolute)
+				if err != nil {
 					return match
 				}
 				return fmt.Sprintf(`URI="%s"`, helperURL(absolute))
@@ -259,7 +284,11 @@ func rewritePlaylist(text string, base *url.URL) (string, error) {
 			out.WriteString(line)
 		default:
 			absolute, err := base.Parse(trimmed)
-			if err != nil || !allowedUpstream(absolute) {
+			if err != nil {
+				return "", errors.New("playlist references invalid URL")
+			}
+			absolute, err = normalizeUpstream(absolute)
+			if err != nil {
 				return "", errors.New("playlist references disallowed host")
 			}
 			out.WriteString(helperURL(absolute))
