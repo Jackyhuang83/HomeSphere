@@ -475,7 +475,106 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main
 
 ---
 
-## 11. 查看运行状态
+## 11. 完整迁移到另一台 VPS
+
+HomeSphere 可以生成一个 root-only 完整迁移包，适合更换 VPS。
+
+迁移包会包含：
+
+- HomeSphere 本地 SQLite（片库、继续播放、最近观看、收藏、想看等）；
+- HomeSphere `.env`；
+- QMediaSync 配置与 STRM；
+- QMediaSync PostgreSQL Docker volume；
+- 已配置的 Cloudflare Tunnel Token 与域名配置（如果存在）。
+
+**迁移包包含敏感凭据，不要上传到 GitHub、网盘或公开链接。只通过 SSH / SCP 传输。**
+
+### 旧 VPS：创建迁移包
+
+SSH 登录旧 VPS 后：
+
+```bash
+homesphere
+```
+
+进入：
+
+```text
+13. 备份 / VPS 迁移
+1. 创建完整迁移包
+```
+
+脚本会短暂停止 HomeSphere、QMediaSync 和 PostgreSQL，制作一致性快照，然后自动恢复服务。
+
+输出类似：
+
+```text
+/root/homesphere-migration-20261002-010203.tar.gz
+```
+
+文件权限自动设为 `600`。
+
+### 把迁移包传到新 VPS
+
+可以先下载到自己的 Mac，再上传到新 VPS：
+
+```bash
+scp root@旧VPS_IP:/root/homesphere-migration-20261002-010203.tar.gz .
+scp homesphere-migration-20261002-010203.tar.gz root@新VPS_IP:/root/
+```
+
+### 新 VPS：先安装 HomeSphere
+
+新 VPS 先执行一次标准一键安装：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install.sh)
+```
+
+这里生成的临时家庭密码和临时本地数据之后会被迁移包覆盖。
+
+### 新 VPS：恢复迁移包
+
+执行：
+
+```bash
+homesphere
+```
+
+选择：
+
+```text
+13. 备份 / VPS 迁移
+3. 从迁移包恢复
+```
+
+输入迁移包路径，例如：
+
+```text
+/root/homesphere-migration-20261002-010203.tar.gz
+```
+
+恢复前，HomeSphere 会先给新 VPS 当前状态自动创建一个回退快照。
+
+如果旧 VPS 已配置 Cloudflare Tunnel，恢复过程会在新 VPS 自动重建同一个 Tunnel systemd 服务，不需要重新把 Token 写进命令或仓库。
+
+### 迁移后的验证顺序
+
+先不要删除旧 VPS。确认以下项目：
+
+1. HomeSphere 能登录；
+2. 片库、海报、收藏、想看、继续播放记录都存在；
+3. QMediaSync 管理页正常，115 授权仍有效；
+4. 随机播放一部电影和一集电视剧；
+5. 停止旧 VPS 后，原来的 HomeSphere 域名仍能正常访问。
+
+全部通过后，再删除旧 VPS 和两台机器上不再需要的迁移包。
+
+> 当前迁移使用 PostgreSQL 物理 volume 快照，因此旧 VPS 和新 VPS 必须使用相同 CPU 架构（例如都为 x86_64）。脚本会自动检查，不一致时拒绝恢复，避免破坏数据库。
+
+---
+
+## 12. 查看运行状态
 
 任何时候都可以在 SSH 中执行：
 
@@ -502,7 +601,7 @@ Tunnel 已配置为 systemd 开机自启，因此 VPS 重启后会自动恢复�
 
 ---
 
-## 12. 出问题时怎么做
+## 13. 出问题时怎么做
 
 ### HomeSphere 打不开
 
@@ -552,7 +651,7 @@ docker system df
 
 ---
 
-## 13. 这台 10GB VPS 不做什么
+## 14. 这台 10GB VPS 不做什么
 
 当前 VPS 只有：
 
@@ -587,7 +686,7 @@ VPS 中只保存：
 
 ---
 
-## 14. 你真正需要记住的命令
+## 15. 你真正需要记住的命令
 
 第一次安装：
 
