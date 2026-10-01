@@ -18,10 +18,11 @@ interface PlaybackProgress {
 
 interface WorkActivityState {
   favorite:boolean;
+  watchlist:boolean;
   mediaProgress:Record<string,PlaybackProgress>;
 }
 
-const EMPTY_ACTIVITY:WorkActivityState={favorite:false,mediaProgress:{}};
+const EMPTY_ACTIVITY:WorkActivityState={favorite:false,watchlist:false,mediaProgress:{}};
 
 export default function WorkPage(){
   const params=useParams<{id:string}>();
@@ -35,7 +36,20 @@ export default function WorkPage(){
   const [playbackLoading,setPlaybackLoading]=useState(false);
   const [playbackError,setPlaybackError]=useState('');
   const [favoriteSaving,setFavoriteSaving]=useState(false);
+  const [watchlistSaving,setWatchlistSaving]=useState(false);
   const [visibilitySaving,setVisibilitySaving]=useState(false);
+  const [editOpen,setEditOpen]=useState(false);
+  const [editTitle,setEditTitle]=useState('');
+  const [editYear,setEditYear]=useState('');
+  const [editType,setEditType]=useState<'movie'|'tv'>('movie');
+  const [editSaving,setEditSaving]=useState(false);
+  const [episodeEditOpen,setEpisodeEditOpen]=useState(false);
+  const [episodeSeason,setEpisodeSeason]=useState('1');
+  const [episodeNumber,setEpisodeNumber]=useState('1');
+  const [episodeSaving,setEpisodeSaving]=useState(false);
+  const [autoNext,setAutoNext]=useState(true);
+  const [playbackRevision,setPlaybackRevision]=useState(0);
+  const fatalRetriedRef=useRef('');
 
   useEffect(()=>{
     if(!id)return;
@@ -62,6 +76,9 @@ export default function WorkPage(){
       .then(([data,state])=>{
         setWork(data);
         setActivity(state);
+        setEditTitle(data.title);
+        setEditYear(data.year||'');
+        setEditType(data.mediaType);
 
         const requested=typeof window!=='undefined'
           ?new URLSearchParams(window.location.search).get('media')
@@ -84,6 +101,13 @@ export default function WorkPage(){
   },[id]);
 
   useEffect(()=>{
+    try{
+      const stored=window.localStorage.getItem('homesphere.player.autoNext');
+      if(stored!==null)setAutoNext(stored!=='0');
+    }catch{}
+  },[]);
+
+  useEffect(()=>{
     if(!selected){
       setPlaybackUrl('');
       setPlaybackError('');
@@ -96,22 +120,31 @@ export default function WorkPage(){
     setPlaybackError('');
     setPlaybackLoading(true);
 
-    fetch(`/api/play/${encodeURIComponent(selected.id)}?resolve=1`,{
-      signal:controller.signal,
-      cache:'no-store',
-    })
-      .then(async res=>{
-        const data=await res.json();
-        if(!res.ok)throw new Error(data.error||'获取播放地址失败');
-        if(!data.url)throw new Error('播放地址为空');
-        return String(data.url);
-      })
-      .then(url=>setPlaybackUrl(url))
-      .catch(err=>{if(err?.name!=='AbortError')setPlaybackError(err instanceof Error?err.message:'获取播放地址失败');})
-      .finally(()=>{if(!controller.signal.aborted)setPlaybackLoading(false);});
+    const resolve=async()=>{
+      let lastError:unknown;
+      for(let attempt=0;attempt<2;attempt++){
+        try{
+          const res=await fetch(`/api/play/${encodeURIComponent(selected.id)}?resolve=1`,{
+            signal:controller.signal,
+            cache:'no-store',
+          });
+          const data=await res.json();
+          if(!res.ok)throw new Error(data.error||'获取播放地址失败');
+          if(!data.url)throw new Error('播放地址为空');
+          if(!controller.signal.aborted)setPlaybackUrl(String(data.url));
+          return;
+        }catch(err){
+          if(controller.signal.aborted)return;
+          lastError=err;
+          if(attempt===0)await new Promise(resolveDelay=>setTimeout(resolveDelay,450));
+        }
+      }
+      if(!controller.signal.aborted)setPlaybackError(lastError instanceof Error?lastError.message:'获取播放地址失败');
+    };
+    void resolve().finally(()=>{if(!controller.signal.aborted)setPlaybackLoading(false);});
 
     return()=>controller.abort();
-  },[selected]);
+  },[selected,playbackRevision]);
 
   const seasons=useMemo(()=>{
     const map=new Map<number,MediaItem[]>();
