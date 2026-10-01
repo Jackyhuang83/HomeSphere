@@ -87,6 +87,9 @@ docker compose "${COMPOSE_FILES[@]}" pull qms-postgres ||
   fail "PostgreSQL 镜像下载失败。当前运行版本未被替换，请检查 VPS 网络后重试。"
 
 say "重启服务"
+# HomeSphere 使用滚动 edge 标签。即使 Compose 未主动判断出 tag digest 变化，
+# 也强制重建门户容器，避免更新后浏览器仍命中上一版前端资源。
+docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere
 docker compose "${COMPOSE_FILES[@]}" up -d
 
 say "配置 HomeSphere 内部播放密钥"
