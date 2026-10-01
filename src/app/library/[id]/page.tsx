@@ -177,7 +177,7 @@ export default function WorkPage(){
     }));
   },[]);
 
-  const chooseMedia=(file:MediaItem)=>{
+  const chooseMedia=useCallback((file:MediaItem)=>{
     fatalRetriedRef.current='';
     setSelected(file);
     setEpisodeEditOpen(false);
@@ -187,7 +187,7 @@ export default function WorkPage(){
       url.searchParams.set('media',file.id);
       window.history.replaceState(null,'',url.pathname+url.search);
     }
-  };
+  },[]);
 
   const toggleFavorite=async()=>{
     if(!work||favoriteSaving)return;
@@ -305,7 +305,7 @@ export default function WorkPage(){
 
   const handlePlaybackEnded=useCallback(()=>{
     if(autoNext&&nextMedia)chooseMedia(nextMedia);
-  },[autoNext,nextMedia]);
+  },[autoNext,nextMedia,chooseMedia]);
 
   const toggleHidden=async()=>{
     if(!work||visibilitySaving)return;
