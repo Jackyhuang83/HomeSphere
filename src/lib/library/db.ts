@@ -345,4 +345,5 @@ function clamp(n:number,min:number,max:number):number {
   const value=Number.isFinite(n)?Math.trunc(n):min;
   return Math.max(min,Math.min(max,value));
 }
+export function getLibraryDatabase():DatabaseSync { return database(); }
 export function __closeLibraryDbForTest():void { db?.close();db=null; }
