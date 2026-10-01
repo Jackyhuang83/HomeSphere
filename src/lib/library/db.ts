@@ -63,7 +63,36 @@ CREATE INDEX IF NOT EXISTS idx_media_path ON media(provider, path);
   ensureColumn(db,'works','added_at','INTEGER');
   ensureColumn(db,'works','hidden',"INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db,'media','source_url','TEXT');
-  db.exec("CREATE INDEX IF NOT EXISTS idx_works_scrape ON works(scrape_status);");
+  ensureColumn(db,'media','manual_episode',"INTEGER NOT NULL DEFAULT 0");
+  db.exec(`
+CREATE INDEX IF NOT EXISTS idx_works_scrape ON works(scrape_status);
+CREATE TABLE IF NOT EXISTS watch_progress (
+  profile_id TEXT NOT NULL,
+  media_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  position REAL NOT NULL DEFAULT 0,
+  duration REAL NOT NULL DEFAULT 0,
+  completed INTEGER NOT NULL DEFAULT 0,
+  last_played_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id,media_id),
+  FOREIGN KEY(media_id) REFERENCES media(id) ON DELETE CASCADE,
+  FOREIGN KEY(work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS favorite_works (
+  profile_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id,work_id),
+  FOREIGN KEY(work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS watchlist_works (
+  profile_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id,work_id),
+  FOREIGN KEY(work_id) REFERENCES works(id) ON DELETE CASCADE
+);
+`);
 
   // HomeSphere is STRM-only. Purge rows created by removed legacy providers.
   db.prepare("DELETE FROM media WHERE provider<>?").run(SOURCE);
@@ -109,9 +138,9 @@ ON CONFLICT(id) DO UPDATE SET
   filename=excluded.filename,
   title=excluded.title,
   year=excluded.year,
-  media_type=excluded.media_type,
-  season=excluded.season,
-  episode=excluded.episode,
+  media_type=(SELECT media_type FROM works WHERE id=excluded.work_id),
+  season=CASE WHEN COALESCE(media.manual_episode,0)=1 THEN media.season ELSE excluded.season END,
+  episode=CASE WHEN COALESCE(media.manual_episode,0)=1 THEN media.episode ELSE excluded.episode END,
   size=excluded.size,
   hash=excluded.hash,
   updated_at=excluded.updated_at
@@ -131,6 +160,9 @@ export function listWorks(opts?:{
   animation?:boolean;
   sort?:'recent';
   hidden?:boolean;
+  personal?:'favorite'|'watchlist';
+  watchState?:'watched'|'inprogress'|'unwatched';
+  profileId?:string;
 }):WorkListResult {
   const limit=clamp(opts?.limit??60,1,200);
   const offset=Math.max(0,Math.trunc(opts?.offset??0));
@@ -142,6 +174,24 @@ export function listWorks(opts?:{
   if(opts?.region){where.push('w.region=?');params.push(opts.region);}
   if(opts?.animation){where.push('COALESCE(w.is_animation,0)=1');}
   where.push(opts?.hidden?'COALESCE(w.hidden,0)=1':'COALESCE(w.hidden,0)=0');
+  const profileId=opts?.profileId||'default';
+  if(opts?.personal==='favorite'){
+    where.push('EXISTS (SELECT 1 FROM favorite_works f WHERE f.work_id=w.id AND f.profile_id=?)');
+    params.push(profileId);
+  }else if(opts?.personal==='watchlist'){
+    where.push('EXISTS (SELECT 1 FROM watchlist_works q WHERE q.work_id=w.id AND q.profile_id=?)');
+    params.push(profileId);
+  }
+  if(opts?.watchState==='watched'){
+    where.push('EXISTS (SELECT 1 FROM media mx WHERE mx.work_id=w.id) AND NOT EXISTS (SELECT 1 FROM media mx WHERE mx.work_id=w.id AND NOT EXISTS (SELECT 1 FROM watch_progress p WHERE p.media_id=mx.id AND p.profile_id=? AND p.completed=1))');
+    params.push(profileId);
+  }else if(opts?.watchState==='inprogress'){
+    where.push('EXISTS (SELECT 1 FROM watch_progress p WHERE p.work_id=w.id AND p.profile_id=? AND p.position>0) AND EXISTS (SELECT 1 FROM media mx WHERE mx.work_id=w.id AND NOT EXISTS (SELECT 1 FROM watch_progress p2 WHERE p2.media_id=mx.id AND p2.profile_id=? AND p2.completed=1))');
+    params.push(profileId,profileId);
+  }else if(opts?.watchState==='unwatched'){
+    where.push('NOT EXISTS (SELECT 1 FROM watch_progress p WHERE p.work_id=w.id AND p.profile_id=? AND p.position>0)');
+    params.push(profileId);
+  }
 
   const whereSql=where.join(' AND ');
   const orderSql=opts?.sort==='recent'
@@ -164,18 +214,59 @@ SELECT COUNT(*) n FROM works w WHERE ${whereSql}
   return {items:(rows as unknown as DbWorkRow[]).map(mapWork),total:Number(countRow.n)};
 }
 
-export function searchWorks(query:string,limit=60,hidden=false):LibraryWork[] {
+export function searchWorks(
+  query:string,
+  limit=60,
+  hidden=false,
+  opts?:{
+    type?:'movie'|'tv';
+    year?:string;
+    region?:MediaRegion;
+    animation?:boolean;
+    personal?:'favorite'|'watchlist';
+    watchState?:'watched'|'inprogress'|'unwatched';
+    profileId?:string;
+  }
+):LibraryWork[] {
   const q=query.trim();
-  if(!q) return [];
+  if(!q)return [];
   const pattern=`%${escapeLike(q)}%`;
+  const where=[
+    'w.provider=?',
+    hidden?'COALESCE(w.hidden,0)=1':'COALESCE(w.hidden,0)=0',
+    "(w.title LIKE ? ESCAPE '\\\\' OR COALESCE(w.original_title,'') LIKE ? ESCAPE '\\\\')",
+  ];
+  const params:Array<string|number>=[SOURCE,pattern,pattern];
+  if(opts?.type){where.push('w.media_type=?');params.push(opts.type);}
+  if(opts?.year){where.push('w.year=?');params.push(opts.year);}
+  if(opts?.region){where.push('w.region=?');params.push(opts.region);}
+  if(opts?.animation)where.push('COALESCE(w.is_animation,0)=1');
+  const profileId=opts?.profileId||'default';
+  if(opts?.personal==='favorite'){
+    where.push('EXISTS (SELECT 1 FROM favorite_works f WHERE f.work_id=w.id AND f.profile_id=?)');
+    params.push(profileId);
+  }else if(opts?.personal==='watchlist'){
+    where.push('EXISTS (SELECT 1 FROM watchlist_works ql WHERE ql.work_id=w.id AND ql.profile_id=?)');
+    params.push(profileId);
+  }
+  if(opts?.watchState==='watched'){
+    where.push('EXISTS (SELECT 1 FROM media mx WHERE mx.work_id=w.id) AND NOT EXISTS (SELECT 1 FROM media mx WHERE mx.work_id=w.id AND NOT EXISTS (SELECT 1 FROM watch_progress p WHERE p.media_id=mx.id AND p.profile_id=? AND p.completed=1))');
+    params.push(profileId);
+  }else if(opts?.watchState==='inprogress'){
+    where.push('EXISTS (SELECT 1 FROM watch_progress p WHERE p.work_id=w.id AND p.profile_id=? AND p.position>0) AND EXISTS (SELECT 1 FROM media mx WHERE mx.work_id=w.id AND NOT EXISTS (SELECT 1 FROM watch_progress p2 WHERE p2.media_id=mx.id AND p2.profile_id=? AND p2.completed=1))');
+    params.push(profileId,profileId);
+  }else if(opts?.watchState==='unwatched'){
+    where.push('NOT EXISTS (SELECT 1 FROM watch_progress p WHERE p.work_id=w.id AND p.profile_id=? AND p.position>0)');
+    params.push(profileId);
+  }
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND COALESCE(w.hidden,0)=${hidden?1:0} AND (w.title LIKE ? ESCAPE '\\' OR COALESCE(w.original_title,'') LIKE ? ESCAPE '\\')
+WHERE ${where.join(' AND ')}
 GROUP BY w.id
 ORDER BY CASE WHEN w.title=? THEN 0 ELSE 1 END,w.updated_at DESC
 LIMIT ?
-`).all(SOURCE,pattern,pattern,q,clamp(limit,1,100));
+`).all(...params,q,clamp(limit,1,100));
   return (rows as unknown as DbWorkRow[]).map(mapWork);
 }
 
@@ -298,6 +389,48 @@ ORDER BY COALESCE(w.hidden,0) ASC,COALESCE(w.manual_match,0) DESC,COUNT(m.id) DE
   return merged;
 }
 
+export function updateWorkBasics(id:string,patch:{
+  title:string;
+  year?:string;
+  mediaType:'movie'|'tv';
+}):LibraryWorkDetail|null {
+  const conn=database();
+  const current=conn.prepare('SELECT media_type FROM works WHERE id=? AND provider=?').get(id,SOURCE) as {media_type:string}|undefined;
+  if(!current)return null;
+  const title=patch.title.normalize('NFKC').trim().slice(0,160);
+  if(!title)return null;
+  const year=patch.year?.trim()||null;
+  const typeChanged=current.media_type!==patch.mediaType;
+
+  if(typeChanged){
+    conn.prepare(`
+UPDATE works SET
+  title=?,year=?,media_type=?,original_title=NULL,tmdb_id=NULL,poster_url=NULL,backdrop_url=NULL,overview=NULL,
+  region=NULL,is_animation=NULL,scrape_status='manual',scrape_error=NULL,match_confidence=NULL,manual_match=1,updated_at=?
+WHERE id=? AND provider=?
+`).run(title,year,patch.mediaType,Date.now(),id,SOURCE);
+  }else{
+    conn.prepare(`
+UPDATE works SET title=?,year=?,scrape_status='manual',scrape_error=NULL,manual_match=1,updated_at=?
+WHERE id=? AND provider=?
+`).run(title,year,Date.now(),id,SOURCE);
+  }
+  conn.prepare('UPDATE media SET media_type=?,year=COALESCE(?,year),updated_at=? WHERE work_id=? AND provider=?')
+    .run(patch.mediaType,year,Date.now(),id,SOURCE);
+  return getWork(id);
+}
+
+export function updateMediaEpisode(id:string,season:number,episode:number):MediaItem|null {
+  const conn=database();
+  const s=Math.max(0,Math.min(99,Math.trunc(season)));
+  const e=Math.max(1,Math.min(9999,Math.trunc(episode)));
+  const result=conn.prepare(`
+UPDATE media SET season=?,episode=?,manual_episode=1,updated_at=?
+WHERE id=? AND provider=?
+`).run(s,e,Date.now(),id,SOURCE);
+  return Number(result.changes||0)>0?getMedia(id):null;
+}
+
 export function setWorkHidden(id:string,hidden:boolean):boolean {
   const result=database().prepare('UPDATE works SET hidden=?,updated_at=? WHERE id=? AND provider=?')
     .run(hidden?1:0,Date.now(),id,SOURCE);
@@ -323,7 +456,7 @@ interface DbWorkRow {
 }
 interface DbMediaRow {
   id:string;work_id:string;source_url:string|null;path:string;filename:string;title:string;year:string|null;
-  media_type:string;season:number|null;episode:number|null;size:number|null;hash:string|null;updated_at:number;
+  media_type:string;season:number|null;episode:number|null;size:number|null;hash:string|null;manual_episode:number|null;updated_at:number;
 }
 function mapWork(row:DbWorkRow):LibraryWork {
   return {
