@@ -3,7 +3,7 @@
 import Hls from 'hls.js';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import type { LibraryWorkDetail, MediaItem } from '@/lib/library/types';
 
@@ -25,6 +25,7 @@ const EMPTY_ACTIVITY:WorkActivityState={favorite:false,mediaProgress:{}};
 
 export default function WorkPage(){
   const params=useParams<{id:string}>();
+  const router=useRouter();
   const id=String(params.id||'');
   const [work,setWork]=useState<LibraryWorkDetail|null>(null);
   const [selected,setSelected]=useState<MediaItem|null>(null);
@@ -34,6 +35,7 @@ export default function WorkPage(){
   const [playbackLoading,setPlaybackLoading]=useState(false);
   const [playbackError,setPlaybackError]=useState('');
   const [favoriteSaving,setFavoriteSaving]=useState(false);
+  const [visibilitySaving,setVisibilitySaving]=useState(false);
 
   useEffect(()=>{
     if(!id)return;
@@ -160,6 +162,33 @@ export default function WorkPage(){
     }
   };
 
+  const toggleHidden=async()=>{
+    if(!work||visibilitySaving)return;
+    const next=!Boolean(work.hidden);
+    if(next&&!window.confirm('只会从 HomeSphere 片库隐藏，不会删除 115 文件或 STRM。确认隐藏？'))return;
+
+    setVisibilitySaving(true);
+    setPlaybackError('');
+    try{
+      const res=await fetch(`/api/library/work/${encodeURIComponent(work.id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({hidden:next}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'更新显示状态失败');
+      if(next){
+        router.push('/library');
+        return;
+      }
+      setWork(data.work as LibraryWorkDetail);
+    }catch(err){
+      setPlaybackError(err instanceof Error?err.message:'更新显示状态失败');
+    }finally{
+      setVisibilitySaving(false);
+    }
+  };
+
   if(error)return <Centered text={error}/>;
   if(!work)return <Centered text="正在读取作品…"/>;
 
@@ -174,7 +203,17 @@ export default function WorkPage(){
     <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
       <div className="flex items-center gap-3">
         <Link href="/library" className="text-sm text-muted hover:text-content">← 返回片库</Link>
-        <Link href={`/library/${work.id}/match`} className="text-sm text-muted hover:text-content ml-auto">修正TMDB</Link>
+        <div className="ml-auto flex items-center gap-3">
+          <Link href={`/library/${work.id}/match`} className="text-sm text-muted hover:text-content">修正TMDB</Link>
+          <button
+            type="button"
+            className="text-sm text-muted hover:text-content"
+            disabled={visibilitySaving}
+            onClick={()=>void toggleHidden()}
+          >
+            {work.hidden?'恢复显示':'隐藏'}
+          </button>
+        </div>
       </div>
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
@@ -207,6 +246,7 @@ export default function WorkPage(){
                 'STRM',
                 work.tmdbId?`TMDB ${work.tmdbId}`:'未匹配TMDB',
                 selectedProgress?.completed?'已看完':undefined,
+                work.hidden?'已隐藏':undefined,
               ].filter(Boolean).join(' · ')}</p>
               <button
                 className={`mt-3 h-9 rounded-lg px-3 text-sm border transition-colors ${activity.favorite?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
