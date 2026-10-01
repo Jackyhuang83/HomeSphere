@@ -6,7 +6,7 @@ HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋
 
 - 1 个 115 会员账号 / 约 50TB 媒体；
 - 1 台 1C1G / 10GB / 10Mbps VPS；
-- iPhone / iPad 为主要播放终端；
+- iPhone / iPad 为主要播放终端，也支持 Windows Chrome / Edge；
 - 不使用 Emby / Jellyfin / Plex；
 - 不在 VPS 上转码，也不让视频字节经过 VPS。
 
@@ -30,11 +30,20 @@ HomeSphere
  ├─ 海报墙 / 推荐
  └─ IPTV
  │
- ▼
-iPhone / iPad
+ ├──────────────► iPhone / iPad
+ │
+ └──────────────► Windows Chrome / Edge
+                         │
+                         ▼
+             HomeSphere Player Helper
+                127.0.0.1:17865
+                         │
+                         ▼
+                      115 CDN
 
 播放数据：
-iPhone / iPad ─────────────► 115 CDN
+iPhone / iPad ─────────────────────► 115 CDN
+Windows ─► 本机 Player Helper ─────► 115 CDN
 ```
 
 HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
@@ -47,6 +56,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - 播放时才解析临时直链；
 - HomeSphere 不代理视频内容；
 - HomeSphere 与 Bridge 默认只监听 VPS 本机；
+- Windows Player Helper 只监听本机 `127.0.0.1:17865`，不对局域网或公网开放；
 - 对外访问统一通过 HTTPS；
 - 对上游调用采用保守限速、缓存和熔断策略。
 
@@ -56,6 +66,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 
 - 家庭密码登录与 30 天 HttpOnly Session
 - iPhone / iPad / 桌面响应式 WebUI
+- Windows Chrome / Edge 通过本机 Player Helper 播放 115 STRM
 - STRM 只读扫描
 - SQLite 本地片库索引
 - 电影 / 剧集作品级归组
@@ -128,11 +139,70 @@ VPS 不需要开放 80 / 443 / 8080 / 12333。
 默认情况下：
 
 ```text
-HomeSphere     127.0.0.1:8080
-Media Bridge（QMediaSync）   127.0.0.1:12333
+HomeSphere                    127.0.0.1:8080
+Media Bridge（QMediaSync）     127.0.0.1:12333
 ```
 
 两者都不会直接裸露公网。
+
+## Windows 播放助手
+
+在 **Windows 的 Chrome / Edge** 中播放 115 STRM 时，需要在 Windows 电脑上安装一次 **HomeSphere Player Helper**。
+
+它只在本机监听：
+
+```text
+127.0.0.1:17865
+```
+
+视频数据路径为：
+
+```text
+Windows 浏览器 -> 本机 Player Helper -> 115 CDN
+```
+
+视频字节不会经过 HomeSphere VPS，Helper 也不会保存 115 Token。
+
+### 安装 / 更新
+
+打开 **Windows PowerShell**，执行：
+
+```powershell
+irm https://raw.githubusercontent.com/Jackyhuang83/HomeSphere/main/scripts/install-windows-helper.ps1 | iex
+```
+
+脚本会自动：
+
+- 下载最新 Player Helper；
+- 校验 SHA256；
+- 停止旧版本并覆盖更新；
+- 启动 Helper；
+- 配置当前 Windows 用户登录后自动启动；
+- 检查本机服务是否正常。
+
+以后需要更新 Helper 时，重新执行同一条命令即可。
+
+### 检查是否运行正常
+
+在浏览器打开：
+
+```text
+http://127.0.0.1:17865/health
+```
+
+正常时会返回类似：
+
+```json
+{
+  "ok": true,
+  "name": "HomeSphere Player Helper",
+  "version": "..."
+}
+```
+
+如果 `ok` 为 `true`，回到 HomeSphere 页面刷新后即可播放。
+
+> Windows 上如果只观看 IPTV 直播，不依赖 115 STRM 播放链路时，不要求安装 Player Helper。
 
 ## 文档
 
