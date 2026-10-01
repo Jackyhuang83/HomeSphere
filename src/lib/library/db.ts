@@ -164,14 +164,14 @@ SELECT COUNT(*) n FROM works w WHERE ${whereSql}
   return {items:(rows as unknown as DbWorkRow[]).map(mapWork),total:Number(countRow.n)};
 }
 
-export function searchWorks(query:string,limit=60):LibraryWork[] {
+export function searchWorks(query:string,limit=60,hidden=false):LibraryWork[] {
   const q=query.trim();
   if(!q) return [];
   const pattern=`%${escapeLike(q)}%`;
   const rows=database().prepare(`
 SELECT w.*,COUNT(m.id) file_count
 FROM works w LEFT JOIN media m ON m.work_id=w.id
-WHERE w.provider=? AND COALESCE(w.hidden,0)=0 AND (w.title LIKE ? ESCAPE '\\' OR COALESCE(w.original_title,'') LIKE ? ESCAPE '\\')
+WHERE w.provider=? AND COALESCE(w.hidden,0)=${hidden?1:0} AND (w.title LIKE ? ESCAPE '\\' OR COALESCE(w.original_title,'') LIKE ? ESCAPE '\\')
 GROUP BY w.id
 ORDER BY CASE WHEN w.title=? THEN 0 ELSE 1 END,w.updated_at DESC
 LIMIT ?
