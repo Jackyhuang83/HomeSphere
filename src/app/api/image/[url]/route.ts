@@ -16,14 +16,27 @@ function isDoubanHost(host: string): boolean {
     h === 'doubanio.com' || h.endsWith('.doubanio.com');
 }
 
+function optimizeImageUrl(value:string):string {
+  try{
+    const url=new URL(value);
+    if(url.hostname.toLowerCase()==='image.tmdb.org'){
+      url.pathname=url.pathname.replace('/t/p/w500/','/t/p/w342/');
+    }
+    return url.toString();
+  }catch{
+    return value;
+  }
+}
+
 export async function GET(req: Request, ctx: { params: Promise<{ url: string }> }) {
   const guarded = guardRequest(req);
   if (guarded) return guarded;
 
   const { url: encodedUrl } = await ctx.params;
-  const targetUrl = (() => {
+  const originalUrl = (() => {
     try { return decodeURIComponent(encodedUrl); } catch { return encodedUrl; }
   })();
+  const targetUrl=optimizeImageUrl(originalUrl);
 
   if (!isValidProxyUrl(targetUrl)) return new NextResponse('无效的图片 URL', { status: 400 });
   if (await isBlockedByDNS(targetUrl)) return new NextResponse('不允许访问私有/保留网络地址', { status: 403 });
@@ -50,7 +63,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ url: string }> 
     if (contentType) out.set('Content-Type', contentType);
     const etag = res.headers.get('etag');
     if (etag) out.set('ETag', etag);
-    out.set('Cache-Control', 'private, max-age=3600');
+    const lastModified=res.headers.get('last-modified');
+    if(lastModified)out.set('Last-Modified',lastModified);
+    out.set('Cache-Control', 'private, max-age=604800, stale-while-revalidate=86400');
+    out.set('X-Content-Type-Options','nosniff');
 
     return new NextResponse(res.body, { status: res.status, headers: out });
   } catch (error) {

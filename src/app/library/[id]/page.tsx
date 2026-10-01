@@ -18,10 +18,11 @@ interface PlaybackProgress {
 
 interface WorkActivityState {
   favorite:boolean;
+  watchlist:boolean;
   mediaProgress:Record<string,PlaybackProgress>;
 }
 
-const EMPTY_ACTIVITY:WorkActivityState={favorite:false,mediaProgress:{}};
+const EMPTY_ACTIVITY:WorkActivityState={favorite:false,watchlist:false,mediaProgress:{}};
 
 export default function WorkPage(){
   const params=useParams<{id:string}>();
@@ -35,7 +36,20 @@ export default function WorkPage(){
   const [playbackLoading,setPlaybackLoading]=useState(false);
   const [playbackError,setPlaybackError]=useState('');
   const [favoriteSaving,setFavoriteSaving]=useState(false);
+  const [watchlistSaving,setWatchlistSaving]=useState(false);
   const [visibilitySaving,setVisibilitySaving]=useState(false);
+  const [editOpen,setEditOpen]=useState(false);
+  const [editTitle,setEditTitle]=useState('');
+  const [editYear,setEditYear]=useState('');
+  const [editType,setEditType]=useState<'movie'|'tv'>('movie');
+  const [editSaving,setEditSaving]=useState(false);
+  const [episodeEditOpen,setEpisodeEditOpen]=useState(false);
+  const [episodeSeason,setEpisodeSeason]=useState('1');
+  const [episodeNumber,setEpisodeNumber]=useState('1');
+  const [episodeSaving,setEpisodeSaving]=useState(false);
+  const [autoNext,setAutoNext]=useState(true);
+  const [playbackRevision,setPlaybackRevision]=useState(0);
+  const fatalRetriedRef=useRef('');
 
   useEffect(()=>{
     if(!id)return;
@@ -62,6 +76,9 @@ export default function WorkPage(){
       .then(([data,state])=>{
         setWork(data);
         setActivity(state);
+        setEditTitle(data.title);
+        setEditYear(data.year||'');
+        setEditType(data.mediaType);
 
         const requested=typeof window!=='undefined'
           ?new URLSearchParams(window.location.search).get('media')
@@ -84,6 +101,13 @@ export default function WorkPage(){
   },[id]);
 
   useEffect(()=>{
+    try{
+      const stored=window.localStorage.getItem('homesphere.player.autoNext');
+      if(stored!==null)setAutoNext(stored!=='0');
+    }catch{}
+  },[]);
+
+  useEffect(()=>{
     if(!selected){
       setPlaybackUrl('');
       setPlaybackError('');
@@ -96,33 +120,55 @@ export default function WorkPage(){
     setPlaybackError('');
     setPlaybackLoading(true);
 
-    fetch(`/api/play/${encodeURIComponent(selected.id)}?resolve=1`,{
-      signal:controller.signal,
-      cache:'no-store',
-    })
-      .then(async res=>{
-        const data=await res.json();
-        if(!res.ok)throw new Error(data.error||'获取播放地址失败');
-        if(!data.url)throw new Error('播放地址为空');
-        return String(data.url);
-      })
-      .then(url=>setPlaybackUrl(url))
-      .catch(err=>{if(err?.name!=='AbortError')setPlaybackError(err instanceof Error?err.message:'获取播放地址失败');})
-      .finally(()=>{if(!controller.signal.aborted)setPlaybackLoading(false);});
+    const resolve=async()=>{
+      let lastError:unknown;
+      for(let attempt=0;attempt<2;attempt++){
+        try{
+          const res=await fetch(`/api/play/${encodeURIComponent(selected.id)}?resolve=1`,{
+            signal:controller.signal,
+            cache:'no-store',
+          });
+          const data=await res.json();
+          if(!res.ok)throw new Error(data.error||'获取播放地址失败');
+          if(!data.url)throw new Error('播放地址为空');
+          if(!controller.signal.aborted)setPlaybackUrl(String(data.url));
+          return;
+        }catch(err){
+          if(controller.signal.aborted)return;
+          lastError=err;
+          if(attempt===0)await new Promise(resolveDelay=>setTimeout(resolveDelay,450));
+        }
+      }
+      if(!controller.signal.aborted)setPlaybackError(lastError instanceof Error?lastError.message:'获取播放地址失败');
+    };
+    void resolve().finally(()=>{if(!controller.signal.aborted)setPlaybackLoading(false);});
 
     return()=>controller.abort();
-  },[selected]);
+  },[selected,playbackRevision]);
+
+  const orderedFiles=useMemo(()=>
+    [...(work?.files||[])].sort((a,b)=>
+      (a.season??1)-(b.season??1)||
+      (a.episode??Number.MAX_SAFE_INTEGER)-(b.episode??Number.MAX_SAFE_INTEGER)||
+      a.filename.localeCompare(b.filename)
+    ),[work]);
 
   const seasons=useMemo(()=>{
     const map=new Map<number,MediaItem[]>();
-    for(const file of work?.files||[]){
+    for(const file of orderedFiles){
       const season=file.season??1;
       const list=map.get(season)||[];
       list.push(file);
       map.set(season,list);
     }
     return map;
-  },[work]);
+  },[orderedFiles]);
+
+  const nextMedia=useMemo(()=>{
+    if(!selected||work?.mediaType!=='tv')return null;
+    const index=orderedFiles.findIndex(file=>file.id===selected.id);
+    return index>=0?orderedFiles[index+1]||null:null;
+  },[orderedFiles,selected,work?.mediaType]);
 
   const handleProgressSaved=useCallback((progress:PlaybackProgress)=>{
     setActivity(current=>({
@@ -131,15 +177,17 @@ export default function WorkPage(){
     }));
   },[]);
 
-  const chooseMedia=(file:MediaItem)=>{
+  const chooseMedia=useCallback((file:MediaItem)=>{
+    fatalRetriedRef.current='';
     setSelected(file);
+    setEpisodeEditOpen(false);
     setPlaybackError('');
     if(typeof window!=='undefined'){
       const url=new URL(window.location.href);
       url.searchParams.set('media',file.id);
       window.history.replaceState(null,'',url.pathname+url.search);
     }
-  };
+  },[]);
 
   const toggleFavorite=async()=>{
     if(!work||favoriteSaving)return;
@@ -161,6 +209,103 @@ export default function WorkPage(){
       setFavoriteSaving(false);
     }
   };
+
+  const toggleWatchlist=async()=>{
+    if(!work||watchlistSaving)return;
+    const next=!activity.watchlist;
+    setWatchlistSaving(true);
+    setActivity(current=>({...current,watchlist:next}));
+    try{
+      const res=await fetch('/api/library/activity',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'watchlist',workId:work.id,watchlist:next}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'想看操作失败');
+    }catch(err){
+      setActivity(current=>({...current,watchlist:!next}));
+      setPlaybackError(err instanceof Error?err.message:'想看操作失败');
+    }finally{
+      setWatchlistSaving(false);
+    }
+  };
+
+  const saveWorkEdit=async()=>{
+    if(!work||editSaving)return;
+    setEditSaving(true);
+    setPlaybackError('');
+    try{
+      const res=await fetch(`/api/library/work/${encodeURIComponent(work.id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'edit',title:editTitle,year:editYear,mediaType:editType}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'保存作品信息失败');
+      const nextWork=data.work as LibraryWorkDetail;
+      setWork(nextWork);
+      setSelected(current=>current?nextWork.files.find(file=>file.id===current.id)||nextWork.files[0]||null:nextWork.files[0]||null);
+      setEditTitle(nextWork.title);
+      setEditYear(nextWork.year||'');
+      setEditType(nextWork.mediaType);
+      setEditOpen(false);
+    }catch(err){
+      setPlaybackError(err instanceof Error?err.message:'保存作品信息失败');
+    }finally{
+      setEditSaving(false);
+    }
+  };
+
+  const openEpisodeEdit=()=>{
+    if(!selected)return;
+    setEpisodeSeason(String(selected.season??1));
+    setEpisodeNumber(String(selected.episode??1));
+    setEpisodeEditOpen(true);
+  };
+
+  const saveEpisodeEdit=async()=>{
+    if(!work||!selected||episodeSaving)return;
+    setEpisodeSaving(true);
+    setPlaybackError('');
+    try{
+      const res=await fetch(`/api/library/media/${encodeURIComponent(selected.id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'episode',season:Number(episodeSeason),episode:Number(episodeNumber)}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'保存季集失败');
+      const media=data.media as MediaItem;
+      setWork(current=>current?{...current,files:current.files.map(file=>file.id===media.id?media:file)}:current);
+      setSelected(media);
+      setEpisodeEditOpen(false);
+    }catch(err){
+      setPlaybackError(err instanceof Error?err.message:'保存季集失败');
+    }finally{
+      setEpisodeSaving(false);
+    }
+  };
+
+  const setAutoNextPreference=(value:boolean)=>{
+    setAutoNext(value);
+    try{window.localStorage.setItem('homesphere.player.autoNext',value?'1':'0');}catch{}
+  };
+
+  const handlePlaybackFatal=useCallback((message:string)=>{
+    const mediaId=selected?.id||'';
+    if(mediaId&&fatalRetriedRef.current!==mediaId){
+      fatalRetriedRef.current=mediaId;
+      setPlaybackError('播放链路异常，正在重新解析一次…');
+      setPlaybackRevision(value=>value+1);
+      return;
+    }
+    setPlaybackError(message);
+  },[selected]);
+
+  const handlePlaybackEnded=useCallback(()=>{
+    if(autoNext&&nextMedia)chooseMedia(nextMedia);
+  },[autoNext,nextMedia,chooseMedia]);
 
   const toggleHidden=async()=>{
     if(!work||visibilitySaving)return;
@@ -204,6 +349,7 @@ export default function WorkPage(){
       <div className="flex items-center gap-3">
         <Link href="/library" className="text-sm text-muted hover:text-content">← 返回片库</Link>
         <div className="ml-auto flex items-center gap-3">
+          <button type="button" className="text-sm text-muted hover:text-content" onClick={()=>setEditOpen(value=>!value)}>编辑信息</button>
           <Link href={`/library/${work.id}/match`} className="text-sm text-muted hover:text-content">修正TMDB</Link>
           <button
             type="button"
@@ -216,28 +362,56 @@ export default function WorkPage(){
         </div>
       </div>
 
+      {editOpen&&<section className="mt-4 rounded-xl border border-line bg-card p-4">
+        <h2 className="text-sm font-semibold text-content">编辑作品信息</h2>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_120px_130px] gap-2">
+          <input className="input h-10" value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="片名"/>
+          <input className="input h-10" value={editYear} onChange={e=>setEditYear(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="年份"/>
+          <select className="input h-10" value={editType} onChange={e=>setEditType(e.target.value as 'movie'|'tv')}>
+            <option value="movie">电影</option>
+            <option value="tv">剧集</option>
+          </select>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <button className="btn-primary h-9" disabled={editSaving||!editTitle.trim()} onClick={()=>void saveWorkEdit()}>{editSaving?'保存中…':'保存'}</button>
+          <button className="btn-ghost h-9" disabled={editSaving} onClick={()=>setEditOpen(false)}>取消</button>
+          {editType!==work.mediaType&&<span className="text-xs text-warning">切换电影/剧集类型会清除原 TMDB 匹配，请保存后重新匹配。</span>}
+        </div>
+      </section>}
+
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
         <div>
           <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
             {!selected?<span className="text-white/50 text-sm">没有可播放文件</span>
               :playbackLoading?<span className="text-white/50 text-sm">正在获取播放地址…</span>
-              :playbackError?<span className="text-red-300 text-sm px-4 text-center">{playbackError}</span>
+              :playbackError?<div className="px-4 text-center">
+                <div className="text-red-300 text-sm">{playbackError}</div>
+                <button className="mt-3 rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10" onClick={()=>{fatalRetriedRef.current='';setPlaybackError('');setPlaybackRevision(value=>value+1);}}>重新解析</button>
+              </div>
               :playbackUrl?<HlsVideo
                 key={`${selected.id}:${playbackUrl}`}
                 src={playbackUrl}
                 mediaId={selected.id}
                 initialPosition={selectedProgress?.completed?0:(selectedProgress?.position||0)}
-                onFatalError={setPlaybackError}
+                onFatalError={handlePlaybackFatal}
                 onProgressSaved={handleProgressSaved}
+                onPlaybackEnded={handlePlaybackEnded}
               />
               :<span className="text-white/50 text-sm">播放地址不可用</span>}
           </div>
+          {work.mediaType==='tv'&&<div className="mt-2 flex flex-wrap items-center gap-2">
+            {nextMedia&&<button className="btn-ghost h-8 text-xs" onClick={()=>chooseMedia(nextMedia)}>下一集 · {nextMedia.episode??'?'}</button>}
+            <label className="inline-flex items-center gap-2 text-xs text-muted select-none">
+              <input type="checkbox" checked={autoNext} onChange={e=>setAutoNextPreference(e.target.checked)}/>
+              播放结束自动下一集
+            </label>
+          </div>}
           <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone/iPad 使用原生 HLS；Windows 强制通过本机播放助手 + hls.js 连接 115。视频字节不经过 VPS。</p>
         </div>
 
         <aside className="card p-4">
           <div className="flex gap-3">
-            {poster&&<img src={poster} alt={work.title} className="w-24 aspect-[2/3] object-cover rounded-lg shrink-0"/>}
+            {poster&&<img src={poster} alt={work.title} decoding="async" className="w-24 aspect-[2/3] object-cover rounded-lg shrink-0"/>}
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold text-content">{work.title}</h1>
               <p className="text-sm text-muted mt-1">{[
@@ -248,13 +422,22 @@ export default function WorkPage(){
                 selectedProgress?.completed?'已看完':undefined,
                 work.hidden?'已隐藏':undefined,
               ].filter(Boolean).join(' · ')}</p>
-              <button
-                className={`mt-3 h-9 rounded-lg px-3 text-sm border transition-colors ${activity.favorite?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
-                onClick={()=>void toggleFavorite()}
-                disabled={favoriteSaving}
-              >
-                {activity.favorite?'★ 已收藏':'☆ 收藏'}
-              </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className={`h-9 rounded-lg px-3 text-sm border transition-colors ${activity.favorite?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
+                  onClick={()=>void toggleFavorite()}
+                  disabled={favoriteSaving}
+                >
+                  {activity.favorite?'★ 已收藏':'☆ 收藏'}
+                </button>
+                <button
+                  className={`h-9 rounded-lg px-3 text-sm border transition-colors ${activity.watchlist?'bg-content text-page border-content':'bg-transparent text-content border-line hover:bg-hover'}`}
+                  onClick={()=>void toggleWatchlist()}
+                  disabled={watchlistSaving}
+                >
+                  {activity.watchlist?'✓ 想看':'＋ 想看'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -263,8 +446,23 @@ export default function WorkPage(){
           {selected&&<div className="mt-4">
             <div className="text-xs text-faint mb-1">当前条目</div>
             <div className="text-sm text-content break-all">{selected.filename}</div>
+            {work.mediaType==='tv'&&<button className="mt-2 text-xs text-muted hover:text-content" onClick={openEpisodeEdit}>修正当前季 / 集</button>}
+            {episodeEditOpen&&work.mediaType==='tv'&&<div className="mt-3 rounded-lg border border-line p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-faint">季
+                  <input className="input h-9 mt-1 w-full" inputMode="numeric" value={episodeSeason} onChange={e=>setEpisodeSeason(e.target.value.replace(/\D/g,'').slice(0,2))}/>
+                </label>
+                <label className="text-xs text-faint">集
+                  <input className="input h-9 mt-1 w-full" inputMode="numeric" value={episodeNumber} onChange={e=>setEpisodeNumber(e.target.value.replace(/\D/g,'').slice(0,4))}/>
+                </label>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button className="btn-primary h-8 text-xs" disabled={episodeSaving||!episodeNumber} onClick={()=>void saveEpisodeEdit()}>{episodeSaving?'保存中…':'保存季集'}</button>
+                <button className="btn-ghost h-8 text-xs" disabled={episodeSaving} onClick={()=>setEpisodeEditOpen(false)}>取消</button>
+              </div>
+            </div>}
             {selectedProgress&&<div className="mt-2 text-xs text-muted">
-              {selectedProgress.completed?'已看完':`已观看 ${selectedPercent}% · 下次从这里继续`}
+              {selectedProgress.completed?'已看完':selectedProgress.duration>0?`已观看 ${selectedPercent}% · 下次从这里继续`:'已记录观看进度'}
             </div>}
           </div>}
         </aside>
@@ -272,7 +470,10 @@ export default function WorkPage(){
 
       {work.mediaType==='tv'&&work.files.length>0&&<section className="mt-6 space-y-5">
         {[...seasons.entries()].map(([season,files])=><div key={season}>
-          <h2 className="text-sm font-semibold text-content mb-2">第 {season} 季</h2>
+          <div className="flex flex-wrap items-baseline gap-2 mb-2">
+            <h2 className="text-sm font-semibold text-content">第 {season} 季</h2>
+            {missingEpisodes(files).length>0&&<span className="text-xs text-warning">编号缺口：{missingEpisodes(files).join('、')}</span>}
+          </div>
           <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
             {files.map((file,index)=>{
               const completed=activity.mediaProgress[file.id]?.completed;
@@ -298,12 +499,14 @@ function HlsVideo({
   initialPosition,
   onFatalError,
   onProgressSaved,
+  onPlaybackEnded,
 }:{
   src:string;
   mediaId:string;
   initialPosition:number;
   onFatalError:(message:string)=>void;
   onProgressSaved:(progress:PlaybackProgress)=>void;
+  onPlaybackEnded:()=>void;
 }){
   const videoRef=useRef<HTMLVideoElement|null>(null);
   const initialPositionRef=useRef(initialPosition);
@@ -321,8 +524,9 @@ function HlsVideo({
 
     const persistProgress=(force=false)=>{
       const position=video.currentTime;
-      const duration=video.duration;
-      if(!Number.isFinite(position)||!Number.isFinite(duration)||duration<=0||position<1)return;
+      const rawDuration=video.duration;
+      const duration=Number.isFinite(rawDuration)&&rawDuration>0?rawDuration:0;
+      if(!Number.isFinite(position)||position<1)return;
       const now=Date.now();
       if(!force&&now-lastSavedAt<20000)return;
       lastSavedAt=now;
@@ -342,17 +546,41 @@ function HlsVideo({
 
     const applyResume=()=>{
       if(resumeApplied)return;
-      resumeApplied=true;
       const position=initialPositionRef.current;
+      if(position<30){resumeApplied=true;return;}
       const duration=video.duration;
-      if(
-        Number.isFinite(duration)&&
-        position>=30&&
-        position<duration*0.92&&
-        position<duration-10
-      ){
-        try{video.currentTime=Math.min(position,duration-5);}catch{}
+      if(Number.isFinite(duration)&&duration>0){
+        if(position<duration*0.92&&position<duration-10){
+          try{video.currentTime=Math.min(position,duration-5);}catch{}
+        }
+        resumeApplied=true;
+        return;
       }
+      if(video.seekable.length>0){
+        const end=video.seekable.end(video.seekable.length-1);
+        if(Number.isFinite(end)&&position<end-5){
+          try{video.currentTime=position;resumeApplied=true;}catch{}
+        }
+      }
+    };
+
+    const applyPlayerPreferences=()=>{
+      try{
+        const raw=window.localStorage.getItem('homesphere.player.volume');
+        if(!raw)return;
+        const prefs=JSON.parse(raw) as {volume?:number;muted?:boolean};
+        if(Number.isFinite(prefs.volume))video.volume=Math.max(0,Math.min(1,Number(prefs.volume)));
+        if(typeof prefs.muted==='boolean')video.muted=prefs.muted;
+      }catch{}
+    };
+
+    const savePlayerPreferences=()=>{
+      try{
+        window.localStorage.setItem('homesphere.player.volume',JSON.stringify({
+          volume:video.volume,
+          muted:video.muted,
+        }));
+      }catch{}
     };
 
     const startDesktopPlayback=async()=>{
@@ -410,10 +638,14 @@ function HlsVideo({
 
     const onTimeUpdate=()=>persistProgress(false);
     const onPause=()=>persistProgress(true);
-    const onEnded=()=>persistProgress(true);
+    const onEnded=()=>{persistProgress(true);onPlaybackEnded();};
     const onPageHide=()=>persistProgress(true);
 
+    applyPlayerPreferences();
     video.addEventListener('loadedmetadata',applyResume);
+    video.addEventListener('durationchange',applyResume);
+    video.addEventListener('canplay',applyResume);
+    video.addEventListener('volumechange',savePlayerPreferences);
     video.addEventListener('timeupdate',onTimeUpdate);
     video.addEventListener('pause',onPause);
     video.addEventListener('ended',onEnded);
@@ -433,6 +665,9 @@ function HlsVideo({
       persistProgress(true);
       disposed=true;
       video.removeEventListener('loadedmetadata',applyResume);
+      video.removeEventListener('durationchange',applyResume);
+      video.removeEventListener('canplay',applyResume);
+      video.removeEventListener('volumechange',savePlayerPreferences);
       video.removeEventListener('timeupdate',onTimeUpdate);
       video.removeEventListener('pause',onPause);
       video.removeEventListener('ended',onEnded);
@@ -442,7 +677,7 @@ function HlsVideo({
       video.removeAttribute('src');
       video.load();
     };
-  },[src,mediaId,onFatalError,onProgressSaved]);
+  },[src,mediaId,onFatalError,onProgressSaved,onPlaybackEnded]);
 
   return <video
     ref={videoRef}
@@ -455,6 +690,16 @@ function HlsVideo({
       if(code)onFatalError(`浏览器播放失败（MediaError ${code}）`);
     }}
   />;
+}
+
+function missingEpisodes(files:MediaItem[]):number[] {
+  const numbers=[...new Set(files.map(file=>file.episode).filter((value):value is number=>typeof value==='number'&&Number.isInteger(value)&&value>0))].sort((a,b)=>a-b);
+  if(numbers.length<2)return [];
+  const missing:number[]=[];
+  for(let value=numbers[0];value<=numbers[numbers.length-1]&&missing.length<12;value++){
+    if(!numbers.includes(value))missing.push(value);
+  }
+  return missing;
 }
 
 function Centered({text}:{text:string}){
