@@ -165,7 +165,9 @@ export default function WorkPage(){
   },[]);
 
   const chooseMedia=(file:MediaItem)=>{
+    fatalRetriedRef.current='';
     setSelected(file);
+    setEpisodeEditOpen(false);
     setPlaybackError('');
     if(typeof window!=='undefined'){
       const url=new URL(window.location.href);
@@ -194,6 +196,99 @@ export default function WorkPage(){
       setFavoriteSaving(false);
     }
   };
+
+  const toggleWatchlist=async()=>{
+    if(!work||watchlistSaving)return;
+    const next=!activity.watchlist;
+    setWatchlistSaving(true);
+    setActivity(current=>({...current,watchlist:next}));
+    try{
+      const res=await fetch('/api/library/activity',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'watchlist',workId:work.id,watchlist:next}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'想看操作失败');
+    }catch(err){
+      setActivity(current=>({...current,watchlist:!next}));
+      setPlaybackError(err instanceof Error?err.message:'想看操作失败');
+    }finally{
+      setWatchlistSaving(false);
+    }
+  };
+
+  const saveWorkEdit=async()=>{
+    if(!work||editSaving)return;
+    setEditSaving(true);
+    setPlaybackError('');
+    try{
+      const res=await fetch(`/api/library/work/${encodeURIComponent(work.id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'edit',title:editTitle,year:editYear,mediaType:editType}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'保存作品信息失败');
+      const nextWork=data.work as LibraryWorkDetail;
+      setWork(nextWork);
+      setSelected(current=>current?nextWork.files.find(file=>file.id===current.id)||nextWork.files[0]||null:nextWork.files[0]||null);
+      setEditTitle(nextWork.title);
+      setEditYear(nextWork.year||'');
+      setEditType(nextWork.mediaType);
+      setEditOpen(false);
+    }catch(err){
+      setPlaybackError(err instanceof Error?err.message:'保存作品信息失败');
+    }finally{
+      setEditSaving(false);
+    }
+  };
+
+  const openEpisodeEdit=()=>{
+    if(!selected)return;
+    setEpisodeSeason(String(selected.season??1));
+    setEpisodeNumber(String(selected.episode??1));
+    setEpisodeEditOpen(true);
+  };
+
+  const saveEpisodeEdit=async()=>{
+    if(!work||!selected||episodeSaving)return;
+    setEpisodeSaving(true);
+    setPlaybackError('');
+    try{
+      const res=await fetch(`/api/library/media/${encodeURIComponent(selected.id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'episode',season:Number(episodeSeason),episode:Number(episodeNumber)}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'保存季集失败');
+      const media=data.media as MediaItem;
+      setWork(current=>current?{...current,files:current.files.map(file=>file.id===media.id?media:file)}:current);
+      setSelected(media);
+      setEpisodeEditOpen(false);
+    }catch(err){
+      setPlaybackError(err instanceof Error?err.message:'保存季集失败');
+    }finally{
+      setEpisodeSaving(false);
+    }
+  };
+
+  const setAutoNextPreference=(value:boolean)=>{
+    setAutoNext(value);
+    try{window.localStorage.setItem('homesphere.player.autoNext',value?'1':'0');}catch{}
+  };
+
+  const handlePlaybackFatal=useCallback((message:string)=>{
+    const mediaId=selected?.id||'';
+    if(mediaId&&fatalRetriedRef.current!==mediaId){
+      fatalRetriedRef.current=mediaId;
+      setPlaybackError('播放链路异常，正在重新解析一次…');
+      setPlaybackRevision(value=>value+1);
+      return;
+    }
+    setPlaybackError(message);
+  },[selected]);
 
   const toggleHidden=async()=>{
     if(!work||visibilitySaving)return;
