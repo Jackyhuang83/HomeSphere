@@ -35,6 +35,7 @@ export interface LibraryWork {
   scrapeError?:string;
   matchConfidence?:'high'|'medium'|'low';
   manualMatch:boolean;
+  hidden:boolean;
   fileCount:number;
   addedAt?:number;
   updatedAt:number;
