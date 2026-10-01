@@ -26,6 +26,7 @@ interface ActivitySummary {
   continueWatching:ActivityItem[];
   recentWatching:ActivityItem[];
   favorites:ActivityWork[];
+  watchlist:ActivityWork[];
 }
 
 export function LibraryActivitySections(){
@@ -48,7 +49,8 @@ export function LibraryActivitySections(){
   const continueCount=data.continueWatching.length;
   const recentCount=data.recentWatching.length;
   const favoriteCount=data.favorites.length;
-  if(!continueCount&&!recentCount&&!favoriteCount)return null;
+  const watchlistCount=data.watchlist.length;
+  if(!continueCount&&!recentCount&&!favoriteCount&&!watchlistCount)return null;
 
   return <details className="mb-5 sm:mb-6 rounded-2xl border border-line/80 bg-card overflow-hidden">
     <summary className="cursor-pointer select-none px-4 py-3.5 sm:px-5 flex items-center gap-3 text-sm hover:bg-hover/60 transition-colors">
@@ -58,6 +60,7 @@ export function LibraryActivitySections(){
           continueCount?'继续 '+continueCount:'',
           recentCount?'最近 '+recentCount:'',
           favoriteCount?'收藏 '+favoriteCount:'',
+          watchlistCount?'想看 '+watchlistCount:'',
         ].filter(Boolean).join(' · ')}
       </span>
     </summary>
@@ -93,9 +96,9 @@ function ActivityRow({title,items,showProgress=false}:{title:string;items:Activi
   </section>;
 }
 
-function FavoriteRow({items}:{items:ActivityWork[]}){
+function WorkRow({title,items}:{title:string;items:ActivityWork[]}){
   return <section>
-    <h2 className="text-base sm:text-lg font-semibold text-content mb-3">我的收藏</h2>
+    <h2 className="text-base sm:text-lg font-semibold text-content mb-3">{title}</h2>
     <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-thin">
       {items.map(work=><Link key={work.id} href={`/library/${work.id}`} className="group w-[112px] sm:w-[132px] shrink-0">
         <Poster work={work}/>
