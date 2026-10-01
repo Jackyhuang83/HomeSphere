@@ -16,11 +16,11 @@ function isDoubanHost(host: string): boolean {
     h === 'doubanio.com' || h.endsWith('.doubanio.com');
 }
 
-function optimizeImageUrl(value:string):string {
+function normalizeImageUrl(value:string):string {
   try{
     const url=new URL(value);
     if(url.hostname.toLowerCase()==='image.tmdb.org'){
-      url.pathname=url.pathname.replace('/t/p/w500/','/t/p/w342/');
+      url.pathname=url.pathname.replace(/\/t\/p\/w(?:342|500)\//,'/t/p/w500/');
     }
     return url.toString();
   }catch{
@@ -36,7 +36,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ url: string }> 
   const originalUrl = (() => {
     try { return decodeURIComponent(encodedUrl); } catch { return encodedUrl; }
   })();
-  const targetUrl=optimizeImageUrl(originalUrl);
+  const targetUrl=normalizeImageUrl(originalUrl);
 
   if (!isValidProxyUrl(targetUrl)) return new NextResponse('无效的图片 URL', { status: 400 });
   if (await isBlockedByDNS(targetUrl)) return new NextResponse('不允许访问私有/保留网络地址', { status: 403 });
