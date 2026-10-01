@@ -115,7 +115,7 @@ function Poster({work}:{work:ActivityWork}){
   const poster=work.posterUrl?`/api/image/${encodeURIComponent(work.posterUrl)}`:undefined;
   return <div className="aspect-[2/3] rounded-xl overflow-hidden bg-card ring-1 ring-line/80 shadow-sm transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-lg group-hover:ring-accent/30">
     {poster
-      ?<img src={poster} alt={work.title} loading="lazy" className="w-full h-full object-cover"/>
+      ?<img src={poster} alt={work.title} loading="lazy" decoding="async" className="w-full h-full object-cover"/>
       :<div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted bg-gradient-to-br from-card via-chip to-hover">{work.title}</div>}
   </div>;
 }
