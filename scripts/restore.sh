@@ -78,7 +78,7 @@ restore_volume() {
   docker run --rm --user 0 --entrypoint sh \
     -v "$volume:/target" \
     -v "$archive:/backup.tar.gz:ro" \
-    "$image" -c 'find /target -mindepth 1 -maxdepth 1 -exec rm -rf {} \\; && tar -C /target -xzf /backup.tar.gz'
+    "$image" -c 'find /target -mindepth 1 -maxdepth 1 -exec rm -rf {} \; && tar -C /target -xzf /backup.tar.gz'
 }
 
 say "恢复 HomeSphere SQLite / 本地状态"
