@@ -65,7 +65,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ url: string }> 
     if (etag) out.set('ETag', etag);
     const lastModified=res.headers.get('last-modified');
     if(lastModified)out.set('Last-Modified',lastModified);
-    out.set('Cache-Control', 'private, max-age=604800, stale-while-revalidate=86400');
+    if(res.ok){
+      out.set('Cache-Control', 'private, max-age=604800, stale-while-revalidate=86400');
+    }else{
+      out.set('Cache-Control', 'no-store');
+    }
+    try{
+      if(new URL(targetUrl).hostname.toLowerCase()==='image.tmdb.org'){
+        out.set('X-HomeSphere-TMDB-Image-Size','w500');
+      }
+    }catch{}
     out.set('X-Content-Type-Options','nosniff');
 
     return new NextResponse(res.body, { status: res.status, headers: out });
