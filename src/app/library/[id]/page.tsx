@@ -187,7 +187,7 @@ export default function WorkPage(){
       signal:controller.signal,
       cache:'no-store',
     }).then(async res=>{
-      const data=await res.json();
+      const data=await readSubtitleApiJson(res);
       if(!res.ok)throw new Error(data.error||'字幕状态读取失败');
       setSubtitleStatus(data as SubtitleStatus);
     }).catch(err=>{
@@ -202,12 +202,10 @@ export default function WorkPage(){
     setSubtitleMessage('');
     setSubtitleResults([]);
     try{
-      const res=await fetch('/api/library/subtitles',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'search',mediaId:selected.id}),
+      const res=await fetch(`/api/library/subtitles?action=search&mediaId=${encodeURIComponent(selected.id)}`,{
+        cache:'no-store',
       });
-      const data=await res.json();
+      const data=await readSubtitleApiJson(res);
       if(!res.ok)throw new Error(data.error||'字幕搜索失败');
       const items=(data.items||[]) as SubtitleCandidate[];
       setSubtitleResults(items);
@@ -229,7 +227,7 @@ export default function WorkPage(){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({action:'install',mediaId:selected.id,candidateId:candidate.id}),
       });
-      const data=await res.json();
+      const data=await readSubtitleApiJson(res);
       if(!res.ok)throw new Error(data.error||'字幕安装失败');
       setSubtitleResults([]);
       setSubtitleMessage('中文字幕已加载。');
@@ -247,7 +245,7 @@ export default function WorkPage(){
     setSubtitleMessage('');
     try{
       const res=await fetch(`/api/library/subtitles?mediaId=${encodeURIComponent(selected.id)}`,{method:'DELETE'});
-      const data=await res.json();
+      const data=await readSubtitleApiJson(res);
       if(!res.ok)throw new Error(data.error||'删除字幕失败');
       setSubtitleResults([]);
       setSubtitleMessage('已移除当前字幕。');
@@ -856,4 +854,15 @@ function missingEpisodes(files:MediaItem[]):number[] {
 
 function Centered({text}:{text:string}){
   return <div className="min-h-screen"><Header/><main className="min-h-[70vh] flex items-center justify-center px-6 text-muted">{text}</main></div>;
+}
+
+
+async function readSubtitleApiJson(res:Response):Promise<Record<string,any>>{
+  const text=await res.text();
+  try{
+    return JSON.parse(text) as Record<string,any>;
+  }catch{
+    const contentType=res.headers.get('content-type')||'unknown';
+    throw new Error(`字幕接口返回异常响应（HTTP ${res.status}，${contentType}）。请刷新页面后重试。`);
+  }
 }
