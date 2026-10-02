@@ -35,22 +35,44 @@ export function assrtConfigured():boolean {
 
 export async function searchAssrt(queries:string[],signal?:AbortSignal):Promise<AssrtCandidate[]> {
   const token=requireToken();
-  const seen=new Map<number,AssrtCandidate>();
-  for(const query of queries.map(item=>item.trim()).filter(item=>item.length>=3)){
-    const data=await assrtFetch('/sub/search',{
-      q:query,
-      cnt:'15',
-      is_file:'1',
-    },token,signal) as {status?:number;sub?:{subs?:RawSearchItem[]}};
-    for(const raw of data.sub?.subs||[]){
-      if(typeof raw.id!=='number'||!Number.isInteger(raw.id)||!isChinese(raw))continue;
-      const item=mapCandidate(raw);
-      const current=seen.get(item.id);
-      if(!current||item.score>current.score)seen.set(item.id,item);
+  const normalized=queries.map(item=>item.trim()).filter(item=>item.length>=3);
+  if(!normalized.length)return [];
+
+  // Cloudflare sits in front of HomeSphere. Keep the whole subtitle lookup bounded so
+  // a slow ASSRT query cannot turn into an HTML 502 at the edge.
+  const deadline=AbortSignal.timeout(10000);
+  const combined=signal?AbortSignal.any([signal,deadline]):deadline;
+  let lastError:unknown;
+
+  for(let index=0;index<normalized.length;index++){
+    const query=normalized[index];
+    const params:Record<string,string>={q:query,cnt:'15'};
+    // ASSRT documents filename mode for actual release filenames only. Title fallbacks
+    // must use normal text search; applying is_file=1 to every query can be slow/wrong.
+    if(index===0)params.no_muxer='1';
+
+    try{
+      const data=await assrtFetch('/sub/search',params,token,combined) as {status?:number;sub?:{subs?:RawSearchItem[]}};
+      const seen=new Map<number,AssrtCandidate>();
+      for(const raw of data.sub?.subs||[]){
+        if(typeof raw.id!=='number'||!Number.isInteger(raw.id)||!isChinese(raw))continue;
+        const item=mapCandidate(raw);
+        const current=seen.get(item.id);
+        if(!current||item.score>current.score)seen.set(item.id,item);
+      }
+      if(seen.size){
+        return [...seen.values()].sort((a,b)=>b.score-a.score||a.id-b.id).slice(0,10);
+      }
+    }catch(error){
+      lastError=error;
+      if(signal?.aborted)throw error;
+      if(deadline.aborted)throw new Error('ASSRT 字幕搜索超时，请稍后重试');
+      // A failed filename-style lookup should not prevent trying the cleaner title query.
     }
-    if(seen.size>=8)break;
   }
-  return [...seen.values()].sort((a,b)=>b.score-a.score||a.id-b.id).slice(0,10);
+
+  if(lastError&&deadline.aborted)throw new Error('ASSRT 字幕搜索超时，请稍后重试');
+  return [];
 }
 
 export async function downloadAssrtSubtitle(candidateId:number,episode?:number,signal?:AbortSignal):Promise<{
@@ -104,7 +126,7 @@ async function assrtFetch(
     try{
       const response=await fetch(url,{
         headers:{Authorization:`Bearer ${token}`,Accept:'application/json','User-Agent':'HomeSphere/0.1'},
-        signal:signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000),
+        signal:signal?AbortSignal.any([signal,AbortSignal.timeout(5000)]):AbortSignal.timeout(5000),
         cache:'no-store',
       });
       const text=await response.text();
