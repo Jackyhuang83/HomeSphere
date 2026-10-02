@@ -90,3 +90,46 @@ function cleanAssText(value:string):string {
     .replace(/<[^>]+>/g,'')
     .trim();
 }
+
+
+export function shiftVttTimestamps(input:string,offsetSeconds:number):string {
+  if(!Number.isFinite(offsetSeconds)||Math.abs(offsetSeconds)<0.0005)return input;
+  const delta=Math.round(offsetSeconds*1000);
+  const lines=input.replace(/\r\n?/g,'\n').split('\n');
+  return lines.map(line=>{
+    const match=line.match(/^(\s*)(\d{2,}:\d{2}:\d{2}\.\d{3})(\s+-->\s+)(\d{2,}:\d{2}:\d{2}\.\d{3})(.*)$/);
+    if(!match)return line;
+    const rawStart=parseVttTimestamp(match[2]);
+    const rawEnd=parseVttTimestamp(match[4]);
+    if(rawStart===undefined||rawEnd===undefined)return line;
+    let start=Math.max(0,rawStart+delta);
+    let end=rawEnd+delta;
+    if(end<=0){
+      start=0;
+      end=1;
+    }else if(end<=start){
+      end=start+1;
+    }
+    return `${match[1]}${formatVttTimestamp(start)}${match[3]}${formatVttTimestamp(end)}${match[5]}`;
+  }).join('\n');
+}
+
+function parseVttTimestamp(value:string):number|undefined {
+  const match=value.match(/^(\d{2,}):(\d{2}):(\d{2})\.(\d{3})$/);
+  if(!match)return undefined;
+  const hours=Number(match[1]);
+  const minutes=Number(match[2]);
+  const seconds=Number(match[3]);
+  const millis=Number(match[4]);
+  if(!Number.isFinite(hours)||minutes>59||seconds>59)return undefined;
+  return (((hours*60)+minutes)*60+seconds)*1000+millis;
+}
+
+function formatVttTimestamp(value:number):string {
+  const total=Math.max(0,Math.round(value));
+  const hours=Math.floor(total/3600000);
+  const minutes=Math.floor((total%3600000)/60000);
+  const seconds=Math.floor((total%60000)/1000);
+  const millis=total%1000;
+  return `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}.${String(millis).padStart(3,'0')}`;
+}

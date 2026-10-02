@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardRequest, jsonError } from '@/lib/api-guard';
 import { getMedia, getWork } from '@/lib/library/db';
 import { assrtConfigured, downloadAssrtSubtitle, searchAssrt } from '@/lib/subtitles/assrt';
-import { deleteStoredSubtitle, getStoredSubtitle, saveStoredSubtitle } from '@/lib/subtitles/store';
+import { deleteStoredSubtitle, getStoredSubtitle, saveStoredSubtitle, updateStoredSubtitleOffset } from '@/lib/subtitles/store';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -51,6 +51,18 @@ export async function POST(req:Request){
   if(!media)return jsonError('媒体条目不存在',404);
   const work=getWork(media.workId);
   if(!work)return jsonError('作品不存在',404);
+
+  if(input.action==='offset'){
+    const offsetSeconds=Number(input.offsetSeconds);
+    try{
+      const meta=await updateStoredSubtitleOffset(mediaId,offsetSeconds);
+      return NextResponse.json({success:true,subtitle:meta},{
+        headers:{'Cache-Control':'private, no-store'}
+      });
+    }catch(error){
+      return jsonError(error instanceof Error?error.message:'字幕同步调整失败',400);
+    }
+  }
 
   if(input.action==='install'){
     if(!assrtConfigured())return jsonError('尚未配置 ASSRT API Token',503);
