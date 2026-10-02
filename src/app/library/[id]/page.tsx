@@ -31,6 +31,7 @@ interface SubtitleStatus {
     language:string;
     sourceFile:string;
     installedAt:number;
+    offsetSeconds?:number;
   }|null;
 }
 
@@ -252,6 +253,36 @@ export default function WorkPage(){
       setSubtitleRevision(value=>value+1);
     }catch(err){
       setSubtitleMessage(err instanceof Error?err.message:'删除字幕失败');
+    }finally{
+      setSubtitleLoading(false);
+    }
+  };
+
+  const adjustSubtitleOffset=async(delta:number,reset=false)=>{
+    if(!selected||!subtitleStatus?.installed||subtitleLoading)return;
+    const current=Number(subtitleStatus.subtitle?.offsetSeconds||0);
+    const next=reset?0:Math.max(-30,Math.min(30,Math.round((current+delta)*2)/2));
+    if(next===current)return;
+    setSubtitleLoading(true);
+    setSubtitleMessage('');
+    try{
+      const res=await fetch('/api/library/subtitles',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'offset',mediaId:selected.id,offsetSeconds:next}),
+      });
+      const data=await readSubtitleApiJson(res);
+      if(!res.ok)throw new Error(data.error||'字幕同步调整失败');
+      setSubtitleStatus(currentStatus=>currentStatus?{
+        ...currentStatus,
+        installed:true,
+        subtitle:data.subtitle,
+      }:currentStatus);
+      setSubtitleRevision(value=>value+1);
+      if(next===0)setSubtitleMessage('字幕同步已恢复默认。');
+      else setSubtitleMessage(`字幕已${next>0?'延后':'提前'} ${Math.abs(next).toFixed(1)} 秒。`);
+    }catch(err){
+      setSubtitleMessage(err instanceof Error?err.message:'字幕同步调整失败');
     }finally{
       setSubtitleLoading(false);
     }
@@ -532,9 +563,33 @@ export default function WorkPage(){
               </div>
             </div>
             {!subtitleStatus?.configured&&<p className="mt-2 text-xs text-warning">先在 SSH 运行 homesphere → 14. 字幕中心，配置 ASSRT API Token。</p>}
-            {subtitleStatus?.installed&&subtitleStatus.subtitle&&<p className="mt-2 text-xs text-muted break-all">
-              {subtitleStatus.subtitle.language} · {subtitleStatus.subtitle.sourceFile}
-            </p>}
+            {subtitleStatus?.installed&&subtitleStatus.subtitle&&<>
+              <p className="mt-2 text-xs text-muted break-all">
+                {subtitleStatus.subtitle.language} · {subtitleStatus.subtitle.sourceFile}
+              </p>
+              <div className="mt-3 rounded-lg border border-line/80 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted">字幕同步</span>
+                  <button className="btn-ghost h-8 text-xs" disabled={subtitleLoading} onClick={()=>void adjustSubtitleOffset(0.5)}>
+                    字幕早了
+                  </button>
+                  <span className="min-w-[52px] text-center text-xs font-medium text-content">
+                    {(subtitleStatus.subtitle.offsetSeconds||0)>0?'+':''}{(subtitleStatus.subtitle.offsetSeconds||0).toFixed(1)}s
+                  </span>
+                  <button className="btn-ghost h-8 text-xs" disabled={subtitleLoading} onClick={()=>void adjustSubtitleOffset(-0.5)}>
+                    字幕晚了
+                  </button>
+                  <button
+                    className="btn-ghost h-8 text-xs"
+                    disabled={subtitleLoading||Math.abs(subtitleStatus.subtitle.offsetSeconds||0)<0.001}
+                    onClick={()=>void adjustSubtitleOffset(0,true)}
+                  >
+                    恢复默认
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-faint">每点一次调整 0.5 秒；设置按当前影片/剧集单独保存。</p>
+              </div>
+            </>}
             {subtitleMessage&&<p className="mt-2 text-xs text-muted">{subtitleMessage}</p>}
             {subtitleResults.length>0&&<div className="mt-3 space-y-2">
               {subtitleResults.map(item=><div key={item.id} className="rounded-lg border border-line/80 px-3 py-2">
