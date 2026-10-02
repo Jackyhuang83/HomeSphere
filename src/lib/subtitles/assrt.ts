@@ -1,6 +1,6 @@
 import { decodeSubtitleBuffer, subtitleToVtt } from './convert';
 
-const API_BASE='https://api.assrt.net/v1';
+const API_BASES=['https://api.assrt.net/v1','https://api.makedie.me/v1'] as const;
 const MAX_DOWNLOAD_BYTES=3*1024*1024;
 
 export interface AssrtCandidate {
@@ -37,11 +37,11 @@ export async function searchAssrt(queries:string[],signal?:AbortSignal):Promise<
   const token=requireToken();
   const seen=new Map<number,AssrtCandidate>();
   for(const query of queries.map(item=>item.trim()).filter(item=>item.length>=3)){
-    const url=new URL(`${API_BASE}/sub/search`);
-    url.searchParams.set('q',query);
-    url.searchParams.set('cnt','15');
-    url.searchParams.set('is_file','1');
-    const data=await assrtFetch(url,token,signal) as {status?:number;sub?:{subs?:RawSearchItem[]}};
+    const data=await assrtFetch('/sub/search',{
+      q:query,
+      cnt:'15',
+      is_file:'1',
+    },token,signal) as {status?:number;sub?:{subs?:RawSearchItem[]}};
     for(const raw of data.sub?.subs||[]){
       if(typeof raw.id!=='number'||!Number.isInteger(raw.id)||!isChinese(raw))continue;
       const item=mapCandidate(raw);
@@ -61,9 +61,9 @@ export async function downloadAssrtSubtitle(candidateId:number,episode?:number,s
 }> {
   const token=requireToken();
   if(!Number.isInteger(candidateId)||candidateId<=0)throw new Error('字幕 ID 无效');
-  const url=new URL(`${API_BASE}/sub/detail`);
-  url.searchParams.set('id',String(candidateId));
-  const data=await assrtFetch(url,token,signal) as {status?:number;sub?:{subs?:RawDetailItem[]}};
+  const data=await assrtFetch('/sub/detail',{
+    id:String(candidateId),
+  },token,signal) as {status?:number;sub?:{subs?:RawDetailItem[]}};
   const detail=data.sub?.subs?.[0];
   if(!detail)throw new Error('ASSRT 没有返回字幕详情');
 
@@ -91,16 +91,46 @@ function requireToken():string {
   return token;
 }
 
-async function assrtFetch(url:URL,token:string,signal?:AbortSignal):Promise<unknown>{
-  const response=await fetch(url,{
-    headers:{Authorization:`Bearer ${token}`,Accept:'application/json','User-Agent':'HomeSphere/0.1'},
-    signal:signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000),
-    cache:'no-store',
-  });
-  const data=await response.json().catch(()=>null) as {status?:number;errmsg?:string}|null;
-  if(!response.ok)throw new Error(`ASSRT 请求失败（HTTP ${response.status}）`);
-  if(!data||data.status!==0)throw new Error(data?.errmsg||`ASSRT 返回错误状态 ${data?.status??'unknown'}`);
-  return data;
+async function assrtFetch(
+  pathname:string,
+  params:Record<string,string>,
+  token:string,
+  signal?:AbortSignal
+):Promise<unknown>{
+  let lastError:unknown;
+  for(const base of API_BASES){
+    const url=new URL(`${base}${pathname}`);
+    for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
+    try{
+      const response=await fetch(url,{
+        headers:{Authorization:`Bearer ${token}`,Accept:'application/json','User-Agent':'HomeSphere/0.1'},
+        signal:signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000),
+        cache:'no-store',
+      });
+      const text=await response.text();
+      let data:{status?:number;errmsg?:string}|null=null;
+      try{data=JSON.parse(text) as {status?:number;errmsg?:string};}catch{}
+      if(!response.ok){
+        if(response.status>=500){
+          lastError=new Error(`ASSRT ${new URL(base).hostname} 请求失败（HTTP ${response.status}）`);
+          continue;
+        }
+        throw new Error(data?.errmsg||`ASSRT 请求失败（HTTP ${response.status}）`);
+      }
+      if(!data){
+        lastError=new Error(`ASSRT ${new URL(base).hostname} 返回了非 JSON 响应`);
+        continue;
+      }
+      if(data.status!==0)throw new Error(data.errmsg||`ASSRT 返回错误状态 ${data.status??'unknown'}`);
+      return data;
+    }catch(error){
+      if(signal?.aborted)throw error;
+      const message=error instanceof Error?error.message:'ASSRT 请求失败';
+      if(/invalid token|配额|exceed|missing essential arguments/i.test(message))throw error;
+      lastError=error;
+    }
+  }
+  throw lastError instanceof Error?lastError:new Error('ASSRT 主线路和备用线路均不可用');
 }
 
 function mapCandidate(raw:RawSearchItem):AssrtCandidate {
