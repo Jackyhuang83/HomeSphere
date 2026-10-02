@@ -3,7 +3,7 @@
 这份指南按当前实际环境编写：
 
 ```text
-VPS：1 vCPU / 1 GB RAM / 10 GB SSD / 10 Mbps
+VPS：2 vCPU / 2 GB RAM / 30 GB SSD / 30 Mbps
 115：1 个会员账号 / 约 50 TB 媒体
 终端：iPhone / iPad 为主
 ```
@@ -304,7 +304,28 @@ docker stats --no-stream
 
 正常情况下，HomeSphere 不应该持续承担大视频流量。
 
-如果 VPS 的 10Mbps 长时间跑满，说明播放链路有问题，通常是误开了视频代理 / relay。
+如果 VPS 带宽长时间被视频播放跑满，说明播放链路有问题，通常是误开了视频代理 / relay。
+
+
+### 7.1 外挂中文字幕
+
+HomeSphere 的“字幕中心”只下载字幕文本，不下载 115 视频。先在 SSH 中运行：
+
+```bash
+homesphere
+```
+
+进入：
+
+```text
+14. 字幕中心
+1. 配置 / 更换 ASSRT API Token
+```
+
+Token 只保存在 VPS 本地配置。完成后进入电影或剧集详情页，在“中文字幕”区域搜索并选择字幕。SRT / ASS / SSA / VTT 会转换成浏览器可播放的 WebVTT，并保存在 HomeSphere `/data`，完整迁移包会自动带走这些字幕。
+
+字幕搜索服务由 assrt.net 提供。字幕请求有频率限制，不建议批量高频搜索。
+
 
 ---
 
