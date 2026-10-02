@@ -287,7 +287,7 @@ function Notice({children}:{children:React.ReactNode}){
   return <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-content">{children}</div>;
 }
 function WorkCard({item}:{item:LibraryWork}){
-  const poster=item.posterUrl?`/api/image/${encodeURIComponent(item.posterUrl)}`:undefined;
+  const poster=item.posterUrl?`/api/image/${encodeURIComponent(item.posterUrl)}?v=26`:undefined;
   const statusLabel=item.hidden?'已隐藏'
     :item.scrapeStatus==='pending'?'待整理'
     :item.scrapeStatus==='review'?'待确认'

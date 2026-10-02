@@ -337,7 +337,7 @@ export default function WorkPage(){
   if(error)return <Centered text={error}/>;
   if(!work)return <Centered text="正在读取作品…"/>;
 
-  const poster=work.posterUrl?`/api/image/${encodeURIComponent(work.posterUrl)}`:undefined;
+  const poster=work.posterUrl?`/api/image/${encodeURIComponent(work.posterUrl)}?v=26`:undefined;
   const selectedProgress=selected?activity.mediaProgress[selected.id]:undefined;
   const selectedPercent=selectedProgress?.duration
     ?Math.max(0,Math.min(100,Math.round(selectedProgress.position/selectedProgress.duration*100)))
