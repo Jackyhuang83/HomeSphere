@@ -46,8 +46,16 @@ jobs:
         id: image
         shell: bash
         run: |
-          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          set -Eeuo pipefail
+          NAME="ghcr.io/${GITHUB_REPOSITORY,,}"
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and publish
         uses: docker/build-push-action@v6
@@ -64,3 +72,11 @@ jobs:
             org.opencontainers.image.version=${{ steps.image.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Promote stable image to latest
+        if: steps.image.outputs.stable == 'true'
+        shell: bash
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.image.outputs.name }}:latest" \
+            "${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}"
