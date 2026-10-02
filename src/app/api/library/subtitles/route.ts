@@ -13,6 +13,23 @@ export async function GET(req:Request){
   const mediaId=url.searchParams.get('mediaId')?.trim()||'';
   const media=getMedia(mediaId);
   if(!media)return jsonError('媒体条目不存在',404);
+
+  if(url.searchParams.get('action')==='search'){
+    const work=getWork(media.workId);
+    if(!work)return jsonError('作品不存在',404);
+    if(!assrtConfigured())return jsonError('尚未配置 ASSRT API Token，请在 SSH 运行 homesphere → 14. 字幕中心',503);
+    const queries=buildSearchQueries(media.filename,work.mediaType,work.originalTitle,work.title,media.season,media.episode);
+    try{
+      const items=await searchAssrt(queries,req.signal);
+      return NextResponse.json({
+        items,
+        attribution:{label:'字幕服务由 assrt.net 提供',url:'https://2.assrt.net/'},
+      },{headers:{'Cache-Control':'private, no-store'}});
+    }catch(error){
+      return jsonError(error instanceof Error?error.message:'字幕搜索失败',502);
+    }
+  }
+
   const stored=await getStoredSubtitle(mediaId);
   return NextResponse.json({
     configured:assrtConfigured(),
@@ -34,26 +51,6 @@ export async function POST(req:Request){
   if(!media)return jsonError('媒体条目不存在',404);
   const work=getWork(media.workId);
   if(!work)return jsonError('作品不存在',404);
-
-  if(input.action==='search'){
-    if(!assrtConfigured())return jsonError('尚未配置 ASSRT API Token，请在 SSH 运行 homesphere → 14. 字幕中心',503);
-    const basename=media.filename.replace(/\.[^.]+$/,'').trim();
-    const episodeTag=work.mediaType==='tv'&&media.episode
-      ?`S${String(media.season??1).padStart(2,'0')}E${String(media.episode).padStart(2,'0')}`
-      :'';
-    const titleQuery=[work.originalTitle||'',episodeTag].filter(Boolean).join(' ').trim();
-    const fallback=[work.title,episodeTag].filter(Boolean).join(' ').trim();
-    const queries=[basename,titleQuery,fallback].filter((value,index,array)=>value.length>=3&&array.indexOf(value)===index);
-    try{
-      const items=await searchAssrt(queries,req.signal);
-      return NextResponse.json({
-        items,
-        attribution:{label:'字幕服务由 assrt.net 提供',url:'https://assrt.net/'},
-      },{headers:{'Cache-Control':'private, no-store'}});
-    }catch(error){
-      return jsonError(error instanceof Error?error.message:'字幕搜索失败',502);
-    }
-  }
 
   if(input.action==='install'){
     if(!assrtConfigured())return jsonError('尚未配置 ASSRT API Token',503);
@@ -90,4 +87,23 @@ export async function DELETE(req:Request){
   }catch(error){
     return jsonError(error instanceof Error?error.message:'删除字幕失败',500);
   }
+}
+
+
+function buildSearchQueries(
+  filename:string,
+  mediaType:'movie'|'tv',
+  originalTitle:string|undefined,
+  title:string,
+  season:number|undefined,
+  episode:number|undefined
+):string[]{
+  const basename=filename.replace(/\.[^.]+$/,'').trim();
+  const episodeTag=mediaType==='tv'&&episode
+    ?`S${String(season??1).padStart(2,'0')}E${String(episode).padStart(2,'0')}`
+    :'';
+  const titleQuery=[originalTitle||'',episodeTag].filter(Boolean).join(' ').trim();
+  const fallback=[title,episodeTag].filter(Boolean).join(' ').trim();
+  return [basename,titleQuery,fallback]
+    .filter((value,index,array)=>value.length>=3&&array.indexOf(value)===index);
 }
