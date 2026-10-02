@@ -22,6 +22,28 @@ interface WorkActivityState {
   mediaProgress:Record<string,PlaybackProgress>;
 }
 
+interface SubtitleStatus {
+  configured:boolean;
+  installed:boolean;
+  subtitle?:{
+    candidateId:number;
+    title:string;
+    language:string;
+    sourceFile:string;
+    installedAt:number;
+  }|null;
+}
+
+interface SubtitleCandidate {
+  id:number;
+  title:string;
+  videoName?:string;
+  format:string;
+  language:string;
+  source?:string;
+  score:number;
+}
+
 const EMPTY_ACTIVITY:WorkActivityState={favorite:false,watchlist:false,mediaProgress:{}};
 
 export default function WorkPage(){
@@ -49,6 +71,11 @@ export default function WorkPage(){
   const [episodeSaving,setEpisodeSaving]=useState(false);
   const [autoNext,setAutoNext]=useState(true);
   const [playbackRevision,setPlaybackRevision]=useState(0);
+  const [subtitleStatus,setSubtitleStatus]=useState<SubtitleStatus|null>(null);
+  const [subtitleResults,setSubtitleResults]=useState<SubtitleCandidate[]>([]);
+  const [subtitleLoading,setSubtitleLoading]=useState(false);
+  const [subtitleMessage,setSubtitleMessage]=useState('');
+  const [subtitleRevision,setSubtitleRevision]=useState(0);
   const fatalRetriedRef=useRef('');
 
   useEffect(()=>{
@@ -145,6 +172,92 @@ export default function WorkPage(){
 
     return()=>controller.abort();
   },[selected,playbackRevision]);
+
+  useEffect(()=>{
+    if(!selected){
+      setSubtitleStatus(null);
+      setSubtitleResults([]);
+      setSubtitleMessage('');
+      return;
+    }
+    const controller=new AbortController();
+    setSubtitleResults([]);
+    setSubtitleMessage('');
+    fetch(`/api/library/subtitles?mediaId=${encodeURIComponent(selected.id)}`,{
+      signal:controller.signal,
+      cache:'no-store',
+    }).then(async res=>{
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'字幕状态读取失败');
+      setSubtitleStatus(data as SubtitleStatus);
+    }).catch(err=>{
+      if(err?.name!=='AbortError')setSubtitleMessage(err instanceof Error?err.message:'字幕状态读取失败');
+    });
+    return()=>controller.abort();
+  },[selected,subtitleRevision]);
+
+  const searchSubtitles=async()=>{
+    if(!selected||subtitleLoading)return;
+    setSubtitleLoading(true);
+    setSubtitleMessage('');
+    setSubtitleResults([]);
+    try{
+      const res=await fetch('/api/library/subtitles',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'search',mediaId:selected.id}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'字幕搜索失败');
+      const items=(data.items||[]) as SubtitleCandidate[];
+      setSubtitleResults(items);
+      if(items.length===0)setSubtitleMessage('没有找到合适的中文字幕。');
+    }catch(err){
+      setSubtitleMessage(err instanceof Error?err.message:'字幕搜索失败');
+    }finally{
+      setSubtitleLoading(false);
+    }
+  };
+
+  const installSubtitle=async(candidate:SubtitleCandidate)=>{
+    if(!selected||subtitleLoading)return;
+    setSubtitleLoading(true);
+    setSubtitleMessage('正在下载并转换字幕…');
+    try{
+      const res=await fetch('/api/library/subtitles',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'install',mediaId:selected.id,candidateId:candidate.id}),
+      });
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'字幕安装失败');
+      setSubtitleResults([]);
+      setSubtitleMessage('中文字幕已加载。');
+      setSubtitleRevision(value=>value+1);
+    }catch(err){
+      setSubtitleMessage(err instanceof Error?err.message:'字幕安装失败');
+    }finally{
+      setSubtitleLoading(false);
+    }
+  };
+
+  const removeSubtitle=async()=>{
+    if(!selected||subtitleLoading)return;
+    setSubtitleLoading(true);
+    setSubtitleMessage('');
+    try{
+      const res=await fetch(`/api/library/subtitles?mediaId=${encodeURIComponent(selected.id)}`,{method:'DELETE'});
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'删除字幕失败');
+      setSubtitleResults([]);
+      setSubtitleMessage('已移除当前字幕。');
+      setSubtitleRevision(value=>value+1);
+    }catch(err){
+      setSubtitleMessage(err instanceof Error?err.message:'删除字幕失败');
+    }finally{
+      setSubtitleLoading(false);
+    }
+  };
 
   const orderedFiles=useMemo(()=>
     [...(work?.files||[])].sort((a,b)=>
@@ -393,6 +506,7 @@ export default function WorkPage(){
                 src={playbackUrl}
                 mediaId={selected.id}
                 initialPosition={selectedProgress?.completed?0:(selectedProgress?.position||0)}
+                subtitleUrl={subtitleStatus?.installed?`/api/library/subtitles/${encodeURIComponent(selected.id)}/track?v=${subtitleRevision}`:undefined}
                 onFatalError={handlePlaybackFatal}
                 onProgressSaved={handleProgressSaved}
                 onPlaybackEnded={handlePlaybackEnded}
@@ -406,7 +520,41 @@ export default function WorkPage(){
               播放结束自动下一集
             </label>
           </div>}
-          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone/iPad 使用原生 HLS；Windows 强制通过本机播放助手 + hls.js 连接 115。视频字节不经过 VPS。</p>
+          {selected&&<section className="mt-3 rounded-xl border border-line bg-card p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-content">中文字幕</span>
+              <span className="text-xs text-faint">
+                {subtitleStatus?.installed?'已加载':subtitleStatus?.configured?'未加载':'未配置字幕源'}
+              </span>
+              <div className="ml-auto flex gap-2">
+                <button className="btn-ghost h-8 text-xs" disabled={subtitleLoading||!subtitleStatus?.configured} onClick={()=>void searchSubtitles()}>
+                  {subtitleLoading?'处理中…':subtitleStatus?.installed?'重新搜索':'搜索字幕'}
+                </button>
+                {subtitleStatus?.installed&&<button className="btn-ghost h-8 text-xs" disabled={subtitleLoading} onClick={()=>void removeSubtitle()}>移除</button>}
+              </div>
+            </div>
+            {!subtitleStatus?.configured&&<p className="mt-2 text-xs text-warning">先在 SSH 运行 homesphere → 14. 字幕中心，配置 ASSRT API Token。</p>}
+            {subtitleStatus?.installed&&subtitleStatus.subtitle&&<p className="mt-2 text-xs text-muted break-all">
+              {subtitleStatus.subtitle.language} · {subtitleStatus.subtitle.sourceFile}
+            </p>}
+            {subtitleMessage&&<p className="mt-2 text-xs text-muted">{subtitleMessage}</p>}
+            {subtitleResults.length>0&&<div className="mt-3 space-y-2">
+              {subtitleResults.map(item=><div key={item.id} className="rounded-lg border border-line/80 px-3 py-2">
+                <div className="flex gap-3 items-start">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-content line-clamp-2">{item.title}</div>
+                    <div className="mt-1 text-xs text-faint">
+                      {[item.language,item.format,item.source].filter(Boolean).join(' · ')}
+                    </div>
+                    {item.videoName&&<div className="mt-1 text-[11px] text-faint break-all line-clamp-2">{item.videoName}</div>}
+                  </div>
+                  <button className="btn-primary h-8 shrink-0 text-xs" disabled={subtitleLoading} onClick={()=>void installSubtitle(item)}>使用</button>
+                </div>
+              </div>)}
+              <p className="text-[11px] text-faint">字幕服务由 <a className="underline hover:text-content" href="https://assrt.net/" target="_blank" rel="noreferrer">assrt.net</a> 提供。</p>
+            </div>}
+          </section>}
+          <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone/iPad 使用原生 HLS；Windows 强制通过本机播放助手 + hls.js 连接 115。视频字节不经过 VPS；外挂字幕只保存少量文本到 HomeSphere。</p>
         </div>
 
         <aside className="card p-4">
@@ -497,6 +645,7 @@ function HlsVideo({
   src,
   mediaId,
   initialPosition,
+  subtitleUrl,
   onFatalError,
   onProgressSaved,
   onPlaybackEnded,
@@ -504,6 +653,7 @@ function HlsVideo({
   src:string;
   mediaId:string;
   initialPosition:number;
+  subtitleUrl?:string;
   onFatalError:(message:string)=>void;
   onProgressSaved:(progress:PlaybackProgress)=>void;
   onPlaybackEnded:()=>void;
@@ -689,7 +839,9 @@ function HlsVideo({
       const code=event.currentTarget.error?.code;
       if(code)onFatalError(`浏览器播放失败（MediaError ${code}）`);
     }}
-  />;
+  >
+    {subtitleUrl&&<track key={subtitleUrl} kind="subtitles" src={subtitleUrl} srcLang="zh-CN" label="中文" default/>}
+  </video>;
 }
 
 function missingEpisodes(files:MediaItem[]):number[] {
