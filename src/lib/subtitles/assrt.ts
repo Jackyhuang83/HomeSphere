@@ -43,7 +43,7 @@ export async function searchAssrt(queries:string[],signal?:AbortSignal):Promise<
     url.searchParams.set('is_file','1');
     const data=await assrtFetch(url,token,signal) as {status?:number;sub?:{subs?:RawSearchItem[]}};
     for(const raw of data.sub?.subs||[]){
-      if(!Number.isInteger(raw.id)||!isChinese(raw))continue;
+      if(typeof raw.id!=='number'||!Number.isInteger(raw.id)||!isChinese(raw))continue;
       const item=mapCandidate(raw);
       const current=seen.get(item.id);
       if(!current||item.score>current.score)seen.set(item.id,item);
