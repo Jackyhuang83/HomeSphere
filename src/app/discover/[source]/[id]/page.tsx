@@ -53,10 +53,10 @@ function DiscoveryDetailContent() {
   },[source]);
 
   const poster = detail?.posterUrl
-    ? '/api/image/' + encodeURIComponent(detail.posterUrl)
+    ? '/api/image/' + encodeURIComponent(detail.posterUrl) + '?v=26'
     : buildImageUrl(cover);
   const backdrop = detail?.backdropUrl
-    ? '/api/image/' + encodeURIComponent(detail.backdropUrl)
+    ? '/api/image/' + encodeURIComponent(detail.backdropUrl) + '?v=26'
     : '';
 
   return <div className="min-h-screen flex flex-col">
