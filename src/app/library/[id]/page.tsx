@@ -549,7 +549,7 @@ export default function WorkPage(){
                   <button className="btn-primary h-8 shrink-0 text-xs" disabled={subtitleLoading} onClick={()=>void installSubtitle(item)}>使用</button>
                 </div>
               </div>)}
-              <p className="text-[11px] text-faint">字幕服务由 <a className="underline hover:text-content" href="https://assrt.net/" target="_blank" rel="noreferrer">assrt.net</a> 提供。</p>
+              <p className="text-[11px] text-faint">字幕服务由 <a className="underline hover:text-content" href="https://2.assrt.net/" target="_blank" rel="noreferrer">assrt.net</a> 提供。</p>
             </div>}
           </section>}
           <p className="mt-2 text-xs text-faint">播放链路：HomeSphere 鉴权 → QMediaSync 授权 → 115 HLS。iPhone/iPad 使用原生 HLS；Windows 强制通过本机播放助手 + hls.js 连接 115。视频字节不经过 VPS；外挂字幕只保存少量文本到 HomeSphere。</p>
