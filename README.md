@@ -158,7 +158,27 @@ Media Bridge（QMediaSync）     127.0.0.1:12333
 
 ## 字幕中心
 
-HomeSphere 可以为电影和剧集挂载外挂中文字幕。第一阶段使用 ASSRT 作为字幕源。
+HomeSphere 可以为电影和剧集挂载外挂中文字幕。第一阶段使用 **ASSRT（伪射手）** 作为字幕源。
+
+### ASSRT 网站与 API Token
+
+推荐优先使用 ASSRT 镜像站：
+
+- [ASSRT 镜像站：2.assrt.net](https://2.assrt.net/)
+- [ASSRT 主站：assrt.net](https://assrt.net/)
+- [ASSRT API 文档](https://2.assrt.net/api/doc)
+
+如果主站出现 TLS / SSL 错误，可以先改用 `2.assrt.net`；如果浏览器仍报错，再尝试关闭代理/VPN或切换 Wi‑Fi / 蜂窝网络。
+
+第一次使用需要准备 ASSRT API Token：
+
+1. 打开 `https://2.assrt.net/`；
+2. 登录已有账号；没有账号时，从页面中的“加入我们 / 登录”入口完成注册；
+3. 登录后进入用户面板；
+4. 找到自己的 **API Token** 并复制；
+5. Token 属于私密凭据，不要贴到聊天、README、GitHub Issue 或其他公开位置。
+
+### 在 HomeSphere 中配置
 
 SSH 登录 VPS 后运行：
 
@@ -173,11 +193,26 @@ homesphere
 1. 配置 / 更换 ASSRT API Token
 ```
 
-Token 只保存在 VPS 本地 `.env`，不会写入仓库。配置完成后，在影片详情页的“中文字幕”区域点“搜索字幕”，选择合适结果即可。
+粘贴 Token 后，HomeSphere 会先验证 Token；验证成功后自动重启 HomeSphere。
+
+Token 只保存在 VPS 本地 `.env`，不会写入仓库。
+
+### 搜索并使用中文字幕
+
+配置完成后：
+
+1. 打开一部电影或剧集详情页；
+2. 剧集先选择要播放的具体集数；
+3. 在播放器下方找到“中文字幕”区域；
+4. 点击“搜索字幕”；
+5. 优先选择与当前视频文件名、季集号以及 `WEB-DL / BluRay / NF / AMZN` 等版本信息最接近的结果；
+6. 点击“使用”；
+7. 开始播放，确认字幕内容和时间轴是否正常；
+8. 如果不匹配，可以“重新搜索”并换一个结果，或“移除”当前字幕。
 
 HomeSphere 会把 SRT / ASS / SSA / VTT 转换为浏览器可播放的 WebVTT，并保存在 HomeSphere `/data`。这些字幕会跟随完整迁移包一起备份；不会修改 115 原视频或 STRM。
 
-字幕搜索服务由 [assrt.net](https://assrt.net/) 提供。
+字幕只是一小段文本数据，会经过 HomeSphere；**115 视频字节仍然由播放终端直连 CDN，不经过 VPS**。
 
 ## Windows 播放助手
 
