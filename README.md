@@ -2,6 +2,8 @@
 
 HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋友使用。
 
+当前稳定版本：**v0.1.1**。稳定镜像为 `ghcr.io/jackyhuang83/homesphere:0.1.1`，同时发布 `latest` 标签；开发主线继续使用 `edge`。
+
 当前目标环境：
 
 - 1 个 115 会员账号 / 约 50TB 媒体；
@@ -282,6 +284,7 @@ http://127.0.0.1:17865/health
 | [部署指南](docs/DEPLOYMENT.md) | 纯 SSH 部署、115授权、STRM同步、HTTPS、更新与排障 |
 | [架构说明](docs/ARCHITECTURE.md) | STRM / Bridge 边界、播放链路、安全策略 |
 | [第三方声明](THIRD_PARTY_NOTICES.md) | 上游项目与许可证 |
+| [更新日志](CHANGELOG.md) | 稳定版本发布说明与主要变更 |
 
 文档只保留当前有效方案，不记录已经放弃的历史架构。
 
