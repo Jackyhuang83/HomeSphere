@@ -9,6 +9,7 @@ export interface StoredSubtitleMeta {
   language:string;
   sourceFile:string;
   installedAt:number;
+  offsetSeconds?:number;
 }
 
 function rootDir():string {
@@ -41,7 +42,7 @@ export async function getStoredSubtitle(mediaId:string):Promise<{meta:StoredSubt
 export async function saveStoredSubtitle(mediaId:string,vtt:string,meta:Omit<StoredSubtitleMeta,'mediaId'|'installedAt'>):Promise<StoredSubtitleMeta>{
   const p=paths(mediaId);
   await mkdir(p.root,{recursive:true});
-  const full:StoredSubtitleMeta={mediaId,...meta,installedAt:Date.now()};
+  const full:StoredSubtitleMeta={mediaId,...meta,offsetSeconds:0,installedAt:Date.now()};
   await Promise.all([
     writeFile(p.vtt,vtt,{encoding:'utf8',mode:0o600}),
     writeFile(p.meta,JSON.stringify(full,null,2)+'\n',{encoding:'utf8',mode:0o600}),
@@ -52,4 +53,17 @@ export async function saveStoredSubtitle(mediaId:string,vtt:string,meta:Omit<Sto
 export async function deleteStoredSubtitle(mediaId:string):Promise<void>{
   const p=paths(mediaId);
   await Promise.all([rm(p.vtt,{force:true}),rm(p.meta,{force:true})]);
+}
+
+
+export async function updateStoredSubtitleOffset(mediaId:string,offsetSeconds:number):Promise<StoredSubtitleMeta>{
+  if(!Number.isFinite(offsetSeconds))throw new Error('字幕偏移量无效');
+  const rounded=Math.round(offsetSeconds*2)/2;
+  if(rounded<-30||rounded>30)throw new Error('字幕偏移量仅支持 -30 到 +30 秒');
+  const p=paths(mediaId);
+  const stored=await getStoredSubtitle(mediaId);
+  if(!stored)throw new Error('字幕不存在');
+  const meta:StoredSubtitleMeta={...stored.meta,offsetSeconds:rounded};
+  await writeFile(p.meta,JSON.stringify(meta,null,2)+'\n',{encoding:'utf8',mode:0o600});
+  return meta;
 }
