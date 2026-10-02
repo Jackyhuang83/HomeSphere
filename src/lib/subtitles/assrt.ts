@@ -69,13 +69,7 @@ export async function downloadAssrtSubtitle(candidateId:number,episode?:number,s
 
   const file=pickTextFile(detail,episode);
   if(!file?.url)throw new Error('这个字幕包没有可直接使用的 SRT/ASS/SSA/VTT 文件');
-  const target=normalizeDownloadUrl(file.url);
-  const response=await fetch(target,{
-    headers:{'User-Agent':'HomeSphere/0.1 (+private household media portal)'},
-    redirect:'error',
-    signal:signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000),
-    cache:'no-store',
-  });
+  const response=await fetchSubtitleFile(file.url,signal);
   if(!response.ok)throw new Error(`字幕下载失败（HTTP ${response.status}）`);
   const length=Number(response.headers.get('content-length')||0);
   if(length>MAX_DOWNLOAD_BYTES)throw new Error('字幕文件超过 3MB，已拒绝下载');
@@ -156,6 +150,27 @@ function pickTextFile(detail:RawDetailItem,episode?:number):{url:string;name:str
     return {url:detail.url,name:detail.filename};
   }
   return undefined;
+}
+
+async function fetchSubtitleFile(value:string,signal?:AbortSignal):Promise<Response> {
+  let current=normalizeDownloadUrl(value);
+  for(let redirect=0;redirect<=3;redirect++){
+    const response=await fetch(current,{
+      headers:{'User-Agent':'HomeSphere/0.1 (+private household media portal)'},
+      redirect:'manual',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000),
+      cache:'no-store',
+    });
+    if(response.status>=300&&response.status<400){
+      const location=response.headers.get('location');
+      if(!location)throw new Error('字幕下载重定向缺少 Location');
+      if(redirect===3)throw new Error('字幕下载重定向次数过多');
+      current=normalizeDownloadUrl(new URL(location,current).toString());
+      continue;
+    }
+    return response;
+  }
+  throw new Error('字幕下载失败');
 }
 
 function normalizeDownloadUrl(value:string):string {
