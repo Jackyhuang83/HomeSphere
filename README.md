@@ -5,7 +5,7 @@ HomeSphere 是一个私人家庭影视门户，面向本人、家人和少量朋
 当前目标环境：
 
 - 1 个 115 会员账号 / 约 50TB 媒体；
-- 1 台 1C1G / 10GB / 10Mbps VPS；
+- 1 台 2C2G / 30GB / 30Mbps VPS；
 - iPhone / iPad 为主要播放终端，也支持 Windows Chrome / Edge；
 - 不使用 Emby / Jellyfin / Plex；
 - 不在 VPS 上转码，也不让视频字节经过 VPS。
@@ -80,7 +80,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - 电影 / 剧集作品级归组
 - 失效 STRM 自动清理，并在手动同步结果中显示清理数量
 - TMDB 自动匹配、海报、简介与人工纠错
-- 海报加载优化：较小 TMDB 海报规格、异步解码与更长的私有浏览器缓存
+- 海报加载优化：TMDB w500 海报、异步解码与更长的私有浏览器缓存
 - Bridge allowlist、SSRF 防护、限速、短缓存和熔断
 - 播放链路探测
 - 豆瓣 / Bangumi / 影视热榜
@@ -89,6 +89,7 @@ HomeSphere **只消费 STRM**，不直接接入任何网盘 API。
 - 直播 Direct-only：视频由客户端直连源站，HomeSphere 不提供直播视频代理
 - 首次使用检查页 `/setup`
 - 完整 VPS 迁移包：一键备份 / 恢复 HomeSphere、SQLite、QMediaSync PostgreSQL、STRM、配置与现有 Cloudflare Tunnel
+- 字幕中心 v1：ASSRT 中文字幕搜索、SRT/ASS/SSA/VTT 转 WebVTT、本地缓存并随影片播放；字幕文本走 VPS，115 视频仍直连 CDN
 
 ## 快速开始
 
@@ -154,6 +155,29 @@ Media Bridge（QMediaSync）     127.0.0.1:12333
 ```
 
 两者都不会直接裸露公网。
+
+## 字幕中心
+
+HomeSphere 可以为电影和剧集挂载外挂中文字幕。第一阶段使用 ASSRT 作为字幕源。
+
+SSH 登录 VPS 后运行：
+
+```bash
+homesphere
+```
+
+进入：
+
+```text
+14. 字幕中心
+1. 配置 / 更换 ASSRT API Token
+```
+
+Token 只保存在 VPS 本地 `.env`，不会写入仓库。配置完成后，在影片详情页的“中文字幕”区域点“搜索字幕”，选择合适结果即可。
+
+HomeSphere 会把 SRT / ASS / SSA / VTT 转换为浏览器可播放的 WebVTT，并保存在 HomeSphere `/data`。这些字幕会跟随完整迁移包一起备份；不会修改 115 原视频或 STRM。
+
+字幕搜索服务由 [assrt.net](https://assrt.net/) 提供。
 
 ## Windows 播放助手
 
