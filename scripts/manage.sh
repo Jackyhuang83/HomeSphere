@@ -41,6 +41,14 @@ tmdb_state() {
   fi
 }
 
+assrt_state() {
+  if grep -Eq "^ASSRT_API_TOKEN='?[^']+'?$" "$APP_DIR/.env" 2>/dev/null; then
+    printf '已配置'
+  else
+    printf '未配置'
+  fi
+}
+
 show_status() {
   clear
   echo "HomeSphere 管理"
@@ -52,6 +60,7 @@ show_status() {
   printf "Bridge 镜像:    %s\n" "$(docker inspect -f '{{.Config.Image}}' media-bridge 2>/dev/null || printf '未创建')"
   printf "STRM 数量:      %s\n" "$(find "$APP_DIR/media" -type f -iname '*.strm' 2>/dev/null | wc -l | tr -d ' ')"
   printf "TMDB:           %s\n" "$(tmdb_state)"
+  printf "ASSRT 字幕:     %s\n" "$(assrt_state)"
   printf "Cloudflare:     %s\n" "$(tunnel_state)"
   echo
   docker compose "${COMPOSE_FILES[@]}" ps 2>/dev/null || true
@@ -114,6 +123,80 @@ EOF
         mv "$tmp" "$APP_DIR/.env"
         docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere
         echo "TMDB Token 已清除。"
+        pause
+        ;;
+      0) return ;;
+      *) ;;
+    esac
+  done
+}
+
+subtitle_menu() {
+  while true; do
+    clear
+    cat <<EOF
+字幕中心
+
+当前字幕源: ASSRT
+当前状态:   $(assrt_state)
+
+1. 配置 / 更换 ASSRT API Token
+2. 清除 ASSRT API Token
+0. 返回
+
+说明：
+- Token 只保存在 VPS 本地 .env，不写入仓库；
+- HomeSphere 只下载字幕文本，不下载或中继 115 视频；
+- 字幕缓存保存在 HomeSphere /data，备份/迁移会自动带走；
+- ASSRT 个人 API 默认有请求频率限制，请避免批量高频搜索。
+EOF
+    printf "\n请选择: "
+    read -r choice
+    case "$choice" in
+      1)
+        echo
+        read -r -s -p "请输入 ASSRT API Token: " token
+        echo
+        [ -n "$token" ] || { echo "Token 不能为空。"; pause; continue; }
+        [[ "$token" != *"'"* ]] || { echo "Token 格式不正确。"; pause; continue; }
+
+        printf "正在验证 Token..."
+        http_code="$(curl -sS -o /tmp/homesphere-assrt-quota.$$ -w '%{http_code}' --max-time 12 \
+          -H "Authorization: Bearer $token" \
+          -H "Accept: application/json" \
+          https://api.assrt.net/v1/user/quota || true)"
+        if [ "$http_code" != "200" ] || ! grep -q '"status"[[:space:]]*:[[:space:]]*0' /tmp/homesphere-assrt-quota.$$ 2>/dev/null; then
+          rm -f /tmp/homesphere-assrt-quota.$$
+          echo
+          echo "Token 验证失败（HTTP ${http_code:-network error}），没有修改现有配置。"
+          pause
+          continue
+        fi
+        rm -f /tmp/homesphere-assrt-quota.$$
+        echo " 通过"
+
+        umask 077
+        tmp="$(mktemp "$APP_DIR/.env.tmp.XXXXXX")"
+        grep -v '^ASSRT_API_TOKEN=' "$APP_DIR/.env" > "$tmp" || true
+        printf "ASSRT_API_TOKEN='%s'\n" "$token" >> "$tmp"
+        chmod 600 "$tmp"
+        mv "$tmp" "$APP_DIR/.env"
+        unset token
+
+        say "重启 HomeSphere"
+        docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere
+        echo "ASSRT 字幕源已配置。进入影视详情页即可搜索中文字幕。"
+        pause
+        ;;
+      2)
+        umask 077
+        tmp="$(mktemp "$APP_DIR/.env.tmp.XXXXXX")"
+        grep -v '^ASSRT_API_TOKEN=' "$APP_DIR/.env" > "$tmp" || true
+        printf "ASSRT_API_TOKEN=''\n" >> "$tmp"
+        chmod 600 "$tmp"
+        mv "$tmp" "$APP_DIR/.env"
+        docker compose "${COMPOSE_FILES[@]}" up -d --force-recreate homesphere
+        echo "ASSRT API Token 已清除。已下载的本地字幕不会被删除。"
         pause
         ;;
       0) return ;;
@@ -535,6 +618,7 @@ HomeSphere $(version)
 11. 播放链路安全自检
 12. 115 / STRM
 13. 备份 / VPS 迁移
+14. 字幕中心
 0. 退出
 EOF
 
@@ -555,6 +639,7 @@ EOF
     11) playback_safety_check; pause ;;
     12) strm_menu ;;
     13) migration_menu ;;
+    14) subtitle_menu ;;
     0) exit 0 ;;
     *) ;;
   esac
