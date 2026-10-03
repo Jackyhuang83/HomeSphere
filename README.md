@@ -158,6 +158,237 @@ Media Bridge（QMediaSync）     127.0.0.1:12333
 
 两者都不会直接裸露公网。
 
+## 115 网盘影视导入 / STRM 建库
+
+这里的“导入”**不是把 115 里的电影下载到 VPS**。HomeSphere 的正确流程是：
+
+```text
+115 原始影视文件
+   │
+   ▼
+QMediaSync 读取目录与文件信息
+   │
+   ├─ 在 VPS /media 生成很小的 .strm 文本文件
+   │
+   ▼
+HomeSphere 扫描 /media/*.strm
+   │
+   ├─ 建立本地 SQLite 片库
+   ├─ TMDB 补海报 / 简介
+   ▼
+点击播放
+   │
+   ▼
+QMediaSync 解析 115 临时播放地址
+   │
+   ▼
+播放终端 ─────────► 115 CDN
+```
+
+所以 **115 中的原始影视文件始终留在 115**；VPS 只保存 STRM 文本、片库索引、海报相关数据和少量字幕文本，不保存电影本体。
+
+### 1. 打开 QMediaSync
+
+HomeSphere 安装完成后，Media Bridge（QMediaSync）默认只监听：
+
+```text
+127.0.0.1:12333
+```
+
+推荐从自己的电脑建立 SSH Tunnel：
+
+```bash
+ssh -L 12333:127.0.0.1:12333 root@你的VPS_IP
+```
+
+保持 SSH 窗口不要关闭，然后浏览器打开：
+
+```text
+http://127.0.0.1:12333
+```
+
+如果你已经给 QMediaSync 配置了 **Cloudflare Tunnel + Access**，也可以直接使用受 Access 保护的管理域名。不要把 12333 端口直接暴露到公网。
+
+### 2. 第一次配置 QMediaSync
+
+第一次进入后按页面向导完成：
+
+1. 创建 QMediaSync 管理员账号；
+2. 数据库使用 HomeSphere 已部署的 PostgreSQL；
+3. 进入网盘账号管理；
+4. 新增 **115** 账号；
+5. 按页面提示完成 115 OAuth 授权。
+
+HomeSphere 不保存 115 登录凭据；115 授权由 QMediaSync / Media Bridge 单独管理。
+
+### 3. 新增同步目录
+
+在 QMediaSync 中进入“同步目录”相关页面，新建一个同步任务。
+
+建议 **电影和电视剧分开建任务**，例如：
+
+```text
+115 /电影
+    ↓
+/media/影视/电影
+
+115 /电视剧
+    ↓
+/media/影视/电视剧
+```
+
+如果你的 115 已经按地区或类型整理，也可以继续细分：
+
+```text
+115 /电影/华语电影
+    ↓
+/media/影视/电影/华语电影
+```
+
+关键配置：
+
+```text
+115 源目录：选择真正存放影视文件的目录
+STRM 本地目录：/media/...
+STRM 直连地址：http://media-bridge:12333
+```
+
+不要把整个 115 根目录直接加入同步。对于几十 TB 的媒体库，先按电影 / 电视剧或更小目录拆分，后续更容易维护，也能减少无意义的 115 API 调用。
+
+### 4. HomeSphere 推荐的 QMediaSync 设置
+
+为了降低 115 接口调用压力，建议采用保守设置：
+
+```text
+下载队列每秒处理数量：1
+网盘接口 QPS：3
+115 文件列表每页：1150
+```
+
+同时保持以下能力关闭：
+
+- 本地代理 / 115 下载链接代理；
+- 视频 relay / 中继；
+- 元数据上传；
+- 元数据下载；
+- 联动删除 115 原文件；
+- 自动移动或重命名 115 文件；
+- Emby / Jellyfin / Plex 联动。
+
+HomeSphere 只需要 QMediaSync **读取 115 → 生成 STRM → 播放时返回临时直链 / 3xx**。
+
+### 5. 第一次生成 STRM
+
+不要第一次就扫描完整 50TB 媒体库。
+
+推荐先选择一个小目录，例如几十部电影，执行一次：
+
+```text
+全量同步
+```
+
+同步完成后，在 SSH 中运行：
+
+```bash
+homesphere
+```
+
+进入：
+
+```text
+12. 115 / STRM
+2. 检查 STRM
+```
+
+如果正常，会看到 STRM 数量，并确认抽检文件指向：
+
+```text
+http://media-bridge:12333/...
+```
+
+也可以直接在 VPS 检查数量：
+
+```bash
+find /opt/homesphere/media -type f -iname '*.strm' | wc -l
+```
+
+### 6. 把 STRM 导入 HomeSphere 片库
+
+QMediaSync 生成 STRM 后，再让 HomeSphere 建立自己的片库索引。
+
+SSH 中运行：
+
+```bash
+homesphere
+```
+
+进入：
+
+```text
+12. 115 / STRM
+3. 立即同步 HomeSphere STRM 索引
+```
+
+也可以在 WebUI 中使用：
+
+```text
+片库 → 同步 STRM
+```
+
+完成后，HomeSphere 会：
+
+- 扫描 VPS 上的 STRM；
+- 按电影 / 剧集归组；
+- 写入本地 SQLite；
+- 使用 TMDB 补齐海报、年份、简介和地区信息；
+- 不读取或下载视频字节。
+
+### 7. 以后新增电影怎么办
+
+115 中新增电影或剧集后，**不需要重新下载，也不需要每次全量重建 HomeSphere**。
+
+正常流程是：
+
+```text
+115 新增文件
+   ↓
+QMediaSync 增量同步
+   ↓
+生成新的 .strm
+   ↓
+HomeSphere STRM 索引同步
+   ↓
+新影片出现在片库
+```
+
+建议 QMediaSync 使用低频定时同步，例如每 6 小时一次；HomeSphere 安装脚本也会启用 `homesphere-strm-sync.timer`，每 6 小时低频扫描一次本地 STRM。
+
+需要注意：**HomeSphere 的定时任务只扫描 VPS 上已有的 STRM，不会替代 QMediaSync 去扫描 115。** 新文件要先经过 QMediaSync 生成 STRM，HomeSphere 才能看到。
+
+### 8. 验证播放链路
+
+任选一部刚导入的影片测试播放。正确链路应该是：
+
+```text
+HomeSphere
+   ↓
+QMediaSync / Media Bridge
+   ↓ 302 / 临时直链
+播放终端
+   ↓
+115 CDN
+```
+
+播放时可以在 VPS 执行：
+
+```bash
+docker stats --no-stream
+```
+
+正常情况下，VPS 不应该持续出现与视频码率相当的大流量。HomeSphere 的设计目标始终是：**控制面走 VPS，视频字节直连 115 CDN。**
+
+---
+
 ## 字幕中心
 
 HomeSphere 可以为电影和剧集挂载外挂中文字幕。第一阶段使用 **ASSRT（伪射手）** 作为字幕源。
