@@ -389,6 +389,56 @@ docker stats --no-stream
 
 ---
 
+## 夸克网盘支持现状
+
+HomeSphere 当前稳定版 **v0.1.1 默认不直接接入夸克网盘**。
+
+原因不是 HomeSphere 片库层不能识别 STRM，而是当前冻结使用的 QMediaSync v0.14.23 **没有原生夸克驱动**。它当前的网盘/数据源代码主要包括 115、百度网盘、OpenList 和本地目录，因此夸克不能像 115 那样直接在 QMediaSync 里完成授权后生成 STRM。
+
+可选路径是：
+
+```text
+夸克
+  ↓
+OpenList
+  ↓
+QMediaSync 的 OpenList 数据源
+  ↓
+生成 STRM
+  ↓
+HomeSphere
+```
+
+但这里有一个关键限制：OpenList 的普通“夸克网盘”驱动目前需要使用 **本地代理**，也就是视频数据会经过 OpenList 所在服务器中转。这与 HomeSphere 的核心原则“视频字节不经过 VPS”冲突，因此 **HomeSphere 不把普通夸克驱动作为默认方案**。
+
+OpenList 另外提供 **QuarkTV / 夸克 TV** 驱动，官方说明该驱动支持 302，但只支持访问和下载等有限操作。理论上它更符合 HomeSphere 的直链播放架构，但当前 HomeSphere 尚未把 OpenList + QuarkTV 纳入默认安装，也尚未完成实际播放链路验证，因此暂时标记为 **实验性 / 第二阶段**。
+
+当前建议：
+
+- 115：正式支持，使用 QMediaSync 原生 115 OAuth + STRM；
+- 夸克普通驱动：不建议接入 HomeSphere，避免把视频流量中继到 VPS；
+- 夸克 TV：可作为后续实验方案，前提是实际验证始终保持 302 / 客户端直连，不让视频字节经过 HomeSphere VPS；
+- 在验证完成前，不要为了夸克额外开放公网端口，也不要把 Cookie、Token 或 Refresh Token 写入仓库。
+
+如果后续启用夸克，目标架构仍然必须保持：
+
+```text
+HomeSphere / QMediaSync / OpenList
+        │
+        └─ 只负责控制、索引和直链解析
+                         │
+                         ▼
+播放终端 ─────────────► 夸克 CDN
+```
+
+而不是：
+
+```text
+播放终端 → HomeSphere VPS / OpenList VPS → 夸克
+```
+
+---
+
 ## 字幕中心
 
 HomeSphere 可以为电影和剧集挂载外挂中文字幕。第一阶段使用 **ASSRT（伪射手）** 作为字幕源。
